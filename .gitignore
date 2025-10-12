@@ -9,11 +9,13 @@ __pycache__/
 # Test artifacts
 .pytest_cache/
 
+# Runtime logs
+logs/
+
 # Environment files
 .env
 .env.local
 .env.*.local
 .env.production
 .env.test
-
 

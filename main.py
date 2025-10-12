@@ -1,22 +1,19 @@
-#Entry point for running the self Discord bot
+"""Entry point for running the self Discord bot."""
 
 from __future__ import annotations
 
-import asyncio
+import logging
+from contextlib import suppress
 
 from selfbot_discord import ConfigManager
-
-
-async def bootstrap() -> None:
-    # Validate configuration before the bot core is initialised
-    manager = ConfigManager()
-    manager.validate()
-    await asyncio.sleep(0)
+from selfbot_discord.runtime import run_bot
 
 
 def main() -> None:
-    # Synchronously bootstrap the async entrypoint
-    asyncio.run(bootstrap())
+    manager = ConfigManager()
+    with suppress(KeyboardInterrupt):
+        run_bot(manager)
+    logging.getLogger(__name__).info("Bot shutdown complete.")
 
 
 if __name__ == "__main__":
