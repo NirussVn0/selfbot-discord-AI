@@ -108,6 +108,10 @@ class DiscordSelfBot(discord.Client):
         self._conversation_store = conversation_store or ConversationStore()
         self._decider = ResponseDecider(config)
         self._ui = ui
+        self._command_handlers: dict[str, Any] = {
+            "ping": self._command_ping,
+            "help": self._command_help,
+        }
 
     @staticmethod
     def _describe_channel(message: "Message") -> str:
@@ -216,6 +220,9 @@ class DiscordSelfBot(discord.Client):
                 )
             return
 
+        if await self._handle_command(message):
+            return
+
         decision = self._decider.decide(message, self.user)
         if not decision.should_reply:
             logger.debug(
@@ -319,3 +326,55 @@ class DiscordSelfBot(discord.Client):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(persona={self._config.ai.persona!r})"
+
+    async def _handle_command(self, message: Message) -> bool:
+        content = message.content or ""
+        prefix = self._config.discord.command_prefix
+        if not prefix or not content.startswith(prefix):
+            return False
+
+        command_line = content[len(prefix) :].strip()
+        if not command_line:
+            return False
+
+        parts = command_line.split()
+        command = parts[0].lower()
+        args = parts[1:]
+
+        author_id = message.author.id
+        is_admin = author_id in self._config.whitelist.admin_ids or author_id == self.user.id
+        if not is_admin:
+            await message.channel.send("You do not have permission to use self-bot commands.")
+            return True
+
+        handler = self._command_handlers.get(command)
+        if handler is None:
+            await message.channel.send(f"Unknown command `{command}`. Try `{prefix}help`.")
+            return True
+
+        try:
+            await handler(message, args)
+        finally:
+            if self._ui:
+                self._ui.increment_commands()
+                self._ui.notify_event(
+                    f"Executed command `{command}` for [bold]{escape(message.author.display_name or message.author.name)}[/].",
+                    icon="🛠",
+                    style="green",
+                    force=True,
+                )
+        return True
+
+    async def _command_ping(self, message: Message, _: list[str]) -> None:
+        await message.channel.send("Pong! 🏓")
+
+    async def _command_help(self, message: Message, _: list[str]) -> None:
+        prefix = self._config.discord.command_prefix
+        commands = ", ".join(sorted(self._command_handlers.keys()))
+        help_text = (
+            "Available commands:\n"
+            f"- `{prefix}ping`: check if the self-bot is responsive.\n"
+            f"- `{prefix}help`: display this help message.\n"
+            f"AI replies still follow whitelist and mention rules."
+        )
+        await message.channel.send(help_text)

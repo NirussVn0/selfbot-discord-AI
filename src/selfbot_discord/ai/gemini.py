@@ -12,6 +12,7 @@ from selfbot_discord.config.models import AIConfig
 
 logger = logging.getLogger(__name__)
 
+# Predefined persona prompts for different communication styles
 PERSONA_PROMPTS: dict[str, str] = {
     "gen_z": (
         "You are a playful Gen Z friend chatting on Discord. Keep responses short, witty, and full of slang, emojis, "
@@ -28,6 +29,8 @@ PERSONA_PROMPTS: dict[str, str] = {
     ),
 }
 
+DEFAULT_PERSONA = "gen_z"
+
 
 class GeminiAIService:
 
@@ -35,7 +38,7 @@ class GeminiAIService:
 
     def __init__(self, config: AIConfig, api_key: str) -> None:
         self._config = config
-        self._persona_prompt = PERSONA_PROMPTS.get(config.persona, PERSONA_PROMPTS["gen_z"])
+        self._persona_prompt = PERSONA_PROMPTS.get(config.persona, PERSONA_PROMPTS[DEFAULT_PERSONA])
         self._system_prompt = self._load_system_prompt(config.system_prompt_path)
         genai.configure(api_key=api_key)
         self._model_name = self._resolve_model_name(config.model)

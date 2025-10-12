@@ -12,7 +12,7 @@ whitelist:
   enabled: true
   admin_ids: [1195303714777468988]
   user_ids: []
-  guild_ids: [1426842761600176231]
+  guild_ids: []
   channel_ids: [1426842762258546720]
   allow_direct_messages: false
   reload_interval_seconds: 300
@@ -28,7 +28,7 @@ discord:
 
 ai:
   model: gemini-2.5-flash
-  temperature: 0.85
+  temperature: 1.4
   top_p: 0.95
   max_output_tokens: 1024
   system_prompt_path:
