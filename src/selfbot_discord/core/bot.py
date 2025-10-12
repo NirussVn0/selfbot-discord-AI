@@ -154,6 +154,16 @@ class DiscordSelfBot(discord.Client):
         try:
             await self.change_presence(activity=activity)
             applied = True
+        except TypeError as exc:
+            logger.warning("Discord client rejected presence update: %s", exc)
+            if self._ui:
+                self._ui.notify_event(
+                    "Presence update unsupported by this Discord client build.",
+                    icon="⚠",
+                    style="yellow",
+                    force=True,
+                )
+            return
         except AttributeError:
             logger.debug("Gateway not ready during presence update; retrying once.")
             await asyncio.sleep(1)
@@ -161,8 +171,19 @@ class DiscordSelfBot(discord.Client):
             if ws is None:
                 logger.debug("Gateway websocket still unavailable; skipping presence update.")
                 return
-            await self.change_presence(activity=activity)
-            applied = True
+            try:
+                await self.change_presence(activity=activity)
+                applied = True
+            except TypeError as exc:
+                logger.warning("Discord client rejected presence update on retry: %s", exc)
+                if self._ui:
+                    self._ui.notify_event(
+                        "Presence update unsupported by this Discord client build.",
+                        icon="⚠",
+                        style="yellow",
+                        force=True,
+                    )
+                return
         if applied and self._ui:
             self._ui.notify_event(
                 f"Presence set to [italic]{presence}[/]",
