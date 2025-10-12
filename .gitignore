@@ -1,0 +1,18 @@
+# Virtual environments
+.venv/
+
+CONTEXT.md
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Test artifacts
+.pytest_cache/
+
+# Environment files
+.env.local
+.env.*.local
+.env.production
+.env.test
+
+
