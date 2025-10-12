@@ -65,7 +65,10 @@ class AIConfig(BaseModel):
     top_p: float = Field(default=0.95, description="Top-P nucleus sampling parameter.")
     max_output_tokens: PositiveInt = Field(default=1024, description="Maximum number of tokens per response.")
     system_prompt_path: Path | None = Field(default=None, description="Optional path to a custom system prompt file.")
-    persona: Literal["gen_z", "casual", "professional"] = Field(default="gen_z", description="Default conversational persona.")
+    persona: Literal["gen_z", "casual", "professional", "custom"] = Field(
+        default="gen_z",
+        description="Default conversational persona.",
+    )
 
     @field_validator("temperature")
     @classmethod

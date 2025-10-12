@@ -15,9 +15,8 @@ logger = logging.getLogger(__name__)
 # Predefined persona prompts for different communication styles
 PERSONA_PROMPTS: dict[str, str] = {
     "gen_z": (
-        "You are a playful Gen Z friend chatting on Discord. Keep responses short, witty, and full of slang, emojis, "
-        "and casual energy. Use lowercase where it feels natural and weave in contemporary internet culture. "
-        "Feel free to drop fragments or quick reactions, but stay supportive and kind."
+        "You are アミちゃん (Ami-chan), a playful Gen Z friend chatting on Discord. Keep responses short, witty, and full of slang, emojis, and casual energy. "
+        "Use lowercase when it feels natural, blend in contemporary internet culture, and sprinkle in kawaii wholesomeness. "
     ),
     "casual": (
         "You are a relaxed Discord buddy. Respond in a warm, easygoing tone, a bit playful but not over the top. "
@@ -30,6 +29,23 @@ PERSONA_PROMPTS: dict[str, str] = {
 }
 
 DEFAULT_PERSONA = "gen_z"
+CUSTOM_CONTEXT_PATH = Path(__file__).resolve().parents[3] / "CONTEXT.md"
+DEFAULT_CUSTOM_PROMPT = (
+    "You are アミちゃん (Ami-chan)! Keep responses upbeat, friendly, and supportive."
+)
+
+
+def _load_custom_context() -> str:
+    # Load custom context from CONTEXT.md file if it exists
+    try:
+        if CUSTOM_CONTEXT_PATH.exists():
+            content = CUSTOM_CONTEXT_PATH.read_text(encoding="utf-8").strip()
+            if content:
+                return content
+            logger.warning("CONTEXT.md is empty; falling back to default custom persona prompt.")
+    except OSError as exc:
+        logger.warning("Unable to read custom context from CONTEXT.md: %s", exc)
+    return DEFAULT_CUSTOM_PROMPT
 
 
 class GeminiAIService:
@@ -38,7 +54,7 @@ class GeminiAIService:
 
     def __init__(self, config: AIConfig, api_key: str) -> None:
         self._config = config
-        self._persona_prompt = PERSONA_PROMPTS.get(config.persona, PERSONA_PROMPTS[DEFAULT_PERSONA])
+        self._persona_prompt = self._load_persona_prompt(config.persona)
         self._system_prompt = self._load_system_prompt(config.system_prompt_path)
         genai.configure(api_key=api_key)
         self._model_name = self._resolve_model_name(config.model)
@@ -55,6 +71,15 @@ class GeminiAIService:
         except OSError as exc:
             logger.warning("Unable to read system prompt at %s: %s", prompt_path, exc)
         return ""
+
+    def _load_persona_prompt(self, persona: str) -> str:
+        if persona == "custom":
+            return _load_custom_context()
+        prompt = PERSONA_PROMPTS.get(persona)
+        if prompt is None:
+            logger.warning("Unknown persona '%s'; falling back to %s persona.", persona, DEFAULT_PERSONA)
+            return PERSONA_PROMPTS[DEFAULT_PERSONA]
+        return prompt
 
     @classmethod
     def _fetch_available_models(cls) -> set[str]:

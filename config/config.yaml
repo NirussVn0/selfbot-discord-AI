@@ -32,7 +32,7 @@ ai:
   top_p: 0.95
   max_output_tokens: 1024
   system_prompt_path:
-  persona: gen_z
+  persona: custom
 
 rate_limit:
   messages_per_minute: 20
