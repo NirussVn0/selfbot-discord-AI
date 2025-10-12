@@ -110,9 +110,11 @@ class DiscordSelfBot(discord.Client):
         self._conversation_store = conversation_store or ConversationStore()
         self._decider = ResponseDecider(config)
         self._ui = ui
+        self._started_at = time.monotonic()
         self._command_handlers: dict[str, Any] = {
             "ping": self._command_ping,
             "help": self._command_help,
+            "status": self._command_status,
         }
 
     @staticmethod
@@ -330,6 +332,8 @@ class DiscordSelfBot(discord.Client):
         return f"{self.__class__.__name__}(persona={self._config.ai.persona!r})"
 
     async def _handle_command(self, message: Message) -> bool:
+        if self.user is None:
+            return False
         content = message.content or ""
         prefix = self._config.discord.command_prefix
         if not prefix or not content.startswith(prefix):
@@ -368,15 +372,48 @@ class DiscordSelfBot(discord.Client):
         return True
 
     async def _command_ping(self, message: Message, _: list[str]) -> None:
-        await message.channel.send("Pong! 🏓")
+        latency_ms = getattr(self, "latency", 0.0) * 1000
+        await message.channel.send(f"Pong! 🏓 `{latency_ms:.0f} ms`")
 
     async def _command_help(self, message: Message, _: list[str]) -> None:
         prefix = self._config.discord.command_prefix
-        commands = ", ".join(sorted(self._command_handlers.keys()))
         help_text = (
             "Available commands:\n"
             f"- `{prefix}ping`: check if the self-bot is responsive.\n"
+            f"- `{prefix}status`: show current bot status and uptime.\n"
             f"- `{prefix}help`: display this help message.\n"
             f"AI replies still follow whitelist and mention rules."
         )
         await message.channel.send(help_text)
+
+    async def _command_status(self, message: Message, _: list[str]) -> None:
+        uptime_seconds = time.monotonic() - self._started_at
+        latency_ms = getattr(self, "latency", 0.0) * 1000
+        persona = self._config.ai.persona
+        guilds = len(self.guilds)
+        user_display = f"{self.user.name} ({self.user.id})" if self.user else "Unknown"
+        status_text = (
+            "🤖 **Self-Bot Status**\n"
+            f"• User: `{user_display}`\n"
+            f"• Persona: `{persona}`\n"
+            f"• Servers: `{guilds}`\n"
+            f"• Latency: `{latency_ms:.0f} ms`\n"
+            f"• Uptime: `{self._format_duration(uptime_seconds)}`"
+        )
+        await message.channel.send(status_text)
+
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        seconds = int(max(seconds, 0))
+        days, rem = divmod(seconds, 86400)
+        hours, rem = divmod(rem, 3600)
+        minutes, secs = divmod(rem, 60)
+        parts: list[str] = []
+        if days:
+            parts.append(f"{days}d")
+        if days or hours:
+            parts.append(f"{hours}h")
+        if days or hours or minutes:
+            parts.append(f"{minutes}m")
+        parts.append(f"{secs}s")
+        return " ".join(parts)
