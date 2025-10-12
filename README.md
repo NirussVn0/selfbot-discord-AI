@@ -25,7 +25,7 @@ pytest
 ## Environment Variables
 Copy `.env.example` to `.env`
 
-Configuration defaults live in `config/config.yaml` and are validated via `pydantic` models.
+Configuration defaults live in `config/config.example.yaml` and are validated via `pydantic` models.
 
 ## Docker Workflow
 ```bash

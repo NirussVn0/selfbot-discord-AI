@@ -13,7 +13,7 @@ secrets:
 whitelist:
   enabled: true
   admin_ids: [1195303714777468988]
-  user_ids: []
+  user_ids: [1383498214690258954]
   guild_ids: []
   channel_ids: [1356997803905257765, 1344700557671137342]
   allow_direct_messages: true

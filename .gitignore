@@ -1,6 +1,7 @@
 # Virtual environments
 .venv/
 
+config.*.yaml
 abc_CONTEXT.md
 # Python cache
 __pycache__/
