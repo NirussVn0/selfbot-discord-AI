@@ -1,0 +1,45 @@
+logging:
+  level: INFO
+  json_format: true
+  log_dir: logs
+  rotation: 1 week
+
+secrets:
+  discord_token: DISCORD_USER_TOKEN
+  gemini_api_key: GOOGLE_GEMINI_API_KEY
+
+whitelist:
+  enabled: true
+  admin_ids: []
+  user_ids: []
+  guild_ids: []
+  channel_ids: []
+  allow_direct_messages: false
+  reload_interval_seconds: 300
+
+discord:
+  command_prefix: "h!"
+  presence_message: "Lowkey vibing"
+  auto_reply_probability: 0.25
+  auto_reply_cooldown_seconds: 60
+  allow_thread_messages: true
+  mention_required: true
+  service_url:
+
+ai:
+  model: gemini-pro
+  temperature: 0.85
+  top_p: 0.95
+  max_output_tokens: 1024
+  system_prompt_path:
+  persona: gen_z
+
+rate_limit:
+  messages_per_minute: 20
+  queue_size: 50
+  burst_window_seconds: 10
+
+cache:
+  redis_url: redis://redis:6379/0
+  namespace: self_discord_bot
+  default_ttl_seconds: 300
