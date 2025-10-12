@@ -2,6 +2,8 @@
 
 Scaffolding for a Discord self-bot that AI bot 
 
+
+
 ## Toolchain
 - [uv](https://github.com/astral-sh/uv) for dependency and virtualenv management
 - [Docker](https://www.docker.com/) for containerization
@@ -37,4 +39,13 @@ The bot container mounts `./config` read-only so configuration edits on the host
 ```bash
 uv run pytest
 ```
-# selfbot-discord-AI
+## License
+- [LICENSE](LICENSE.md)
+
+# Contributing
+- Contributions are welcome! Please open an issue or submit a pull request.
+- create a branch for your changes
+- Dev: [NirussVn0](https://sabicoder.xyz)
+
+**⚠️ WARNING**: Self-bots violate Discord's Terms of Service and may result in account termination. Use at your own risk for educational purposes only
+
