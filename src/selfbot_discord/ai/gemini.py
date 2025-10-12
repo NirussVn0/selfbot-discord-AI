@@ -31,12 +31,14 @@ PERSONA_PROMPTS: dict[str, str] = {
 
 class GeminiAIService:
 
+    _AVAILABLE_MODELS: set[str] | None = None
+
     def __init__(self, config: AIConfig, api_key: str) -> None:
         self._config = config
-        self._model_name = config.model
         self._persona_prompt = PERSONA_PROMPTS.get(config.persona, PERSONA_PROMPTS["gen_z"])
         self._system_prompt = self._load_system_prompt(config.system_prompt_path)
         genai.configure(api_key=api_key)
+        self._model_name = self._resolve_model_name(config.model)
         self._model = genai.GenerativeModel(self._model_name)
 
     def _load_system_prompt(self, prompt_path: Path | None) -> str:
@@ -50,6 +52,31 @@ class GeminiAIService:
         except OSError as exc:
             logger.warning("Unable to read system prompt at %s: %s", prompt_path, exc)
         return ""
+
+    @classmethod
+    def _fetch_available_models(cls) -> set[str]:
+        if cls._AVAILABLE_MODELS is not None:
+            return cls._AVAILABLE_MODELS
+        try:
+            cls._AVAILABLE_MODELS = {model.name for model in genai.list_models()}
+        except Exception as exc:  # pragma: no cover - network errors
+            logger.warning("Unable to retrieve Gemini model list: %s", exc)
+            cls._AVAILABLE_MODELS = set()
+        return cls._AVAILABLE_MODELS
+
+    @staticmethod
+    def _normalise_model_name(name: str) -> str:
+        if name.startswith("models/"):
+            return name
+        return f"models/{name}"
+
+    def _resolve_model_name(self, configured: str) -> str:
+        candidate = self._normalise_model_name(configured)
+        available = self._fetch_available_models()
+        if available and candidate not in available:
+            logger.error("Gemini model '%s' is not available. Available models: %s", candidate, ", ".join(sorted(available)))
+            raise ValueError(f"Gemini model '{configured}' is not available.")
+        return candidate
 
     async def generate_reply(
         self,
@@ -113,7 +140,31 @@ class GeminiAIService:
         except Exception as exc:  # pragma: no cover - network errors are runtime concerns
             logger.exception("Gemini generation failed: %s", exc)
             raise
-        text = (response.text or "").strip()
+        text = self._extract_text(response)
         if not text:
-            raise RuntimeError("Gemini returned an empty response.")
+            finish_reason = None
+            if getattr(response, "candidates", None):
+                finish_reason = getattr(response.candidates[0], "finish_reason", None)
+            logger.warning(
+                "Gemini returned no content (finish_reason=%s).", finish_reason
+            )
         return text
+
+    @staticmethod
+    def _extract_text(response: genai.types.GenerateContentResponse) -> str:
+        try:
+            quick_text = response.text
+        except ValueError:
+            quick_text = None
+        if quick_text:
+            return quick_text.strip()
+
+        candidates = getattr(response, "candidates", None) or []
+        lines: list[str] = []
+        for candidate in candidates:
+            parts = getattr(getattr(candidate, "content", None), "parts", []) or []
+            for part in parts:
+                text = getattr(part, "text", None)
+                if text:
+                    lines.append(text.strip())
+        return "\n".join(filter(None, lines)).strip()

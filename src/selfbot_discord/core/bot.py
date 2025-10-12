@@ -244,6 +244,18 @@ class DiscordSelfBot(discord.Client):
                     style="red",
                     force=True,
                 )
+            fallback = "Sorry, the AI service is unavailable right now."
+            await message.channel.send(fallback)
+            self._decider.register_reply(message.channel.id)
+            self._conversation_store.append(message.channel.id, "bot", fallback)
+            if self._ui:
+                self._ui.increment_replies()
+                self._ui.notify_event(
+                    f"Sent fallback reply to [bold]{author_markup}[/].",
+                    icon="🛟",
+                    style="yellow",
+                    force=True,
+                )
             return
 
         if not reply.strip():
@@ -252,6 +264,18 @@ class DiscordSelfBot(discord.Client):
                 self._ui.notify_event(
                     f"AI returned an empty reply for [bold]{author_markup}[/].",
                     icon="⚠",
+                    style="yellow",
+                    force=True,
+                )
+            fallback = "Sorry, I couldn't think of a response right now."
+            await message.channel.send(fallback)
+            self._decider.register_reply(message.channel.id)
+            self._conversation_store.append(message.channel.id, "bot", fallback)
+            if self._ui:
+                self._ui.increment_replies()
+                self._ui.notify_event(
+                    f"Sent fallback reply to [bold]{author_markup}[/].",
+                    icon="🛟",
                     style="yellow",
                     force=True,
                 )

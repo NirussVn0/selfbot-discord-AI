@@ -33,6 +33,16 @@ class JsonLogFormatter(logging.Formatter):
 
     RESERVED_FIELDS: Final[tuple[str, ...]] = ("message", "asctime")
 
+    @staticmethod
+    def _serialise(value: object) -> object:
+        if isinstance(value, Exception):
+            return str(value)
+        try:
+            json.dumps(value)
+            return value
+        except TypeError:
+            return repr(value)
+
     def format(self, record: logging.LogRecord) -> str:
         asctime = self.formatTime(record, datefmt="%Y-%m-%dT%H:%M:%SZ")
         payload: dict[str, object] = {
@@ -48,7 +58,7 @@ class JsonLogFormatter(logging.Formatter):
                 continue
             if key in payload:
                 continue
-            payload[key] = value
+            payload[key] = self._serialise(value)
         return json.dumps(payload, ensure_ascii=False)
 
 
