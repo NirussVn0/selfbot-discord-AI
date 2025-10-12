@@ -1,3 +1,5 @@
+# Copyright (c) [2025] NirrussVn0
+
 from __future__ import annotations
 
 import asyncio
