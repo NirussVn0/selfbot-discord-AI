@@ -8,11 +8,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import discord
+from rich.markup import escape
 
 from selfbot_discord.ai.gemini import GeminiAIService
 from selfbot_discord.config.models import AppConfig
 from selfbot_discord.services.context import ConversationStore
 from selfbot_discord.services.whitelist import WhitelistService
+from selfbot_discord.ui import ConsoleUI
 
 if TYPE_CHECKING:
     from discord import Message
@@ -79,7 +81,7 @@ class ResponseDecider:
         return ResponseDecision(should_reply=False, reason="auto reply roll failed")
 
 class DiscordSelfBot(discord.Client):
-    #Discord self-bot powered by Gemini responses
+    # Discord self-bot powered by Gemini responses and rich CLI feedback.
 
     def __init__(
         self,
@@ -88,6 +90,7 @@ class DiscordSelfBot(discord.Client):
         whitelist: WhitelistService,
         ai_service: GeminiAIService,
         conversation_store: ConversationStore | None = None,
+        ui: ConsoleUI | None = None,
     ) -> None:
         kwargs: dict[str, Any] = {}
         intents_cls = getattr(discord, "Intents", None)
@@ -104,9 +107,24 @@ class DiscordSelfBot(discord.Client):
         self._ai_service = ai_service
         self._conversation_store = conversation_store or ConversationStore()
         self._decider = ResponseDecider(config)
+        self._ui = ui
+
+    @staticmethod
+    def _describe_channel(message: "Message") -> str:
+        if message.guild is None:
+            return "Direct Message"
+        channel = message.channel
+        if isinstance(channel, discord.Thread):
+            parent = getattr(channel, "parent", None)
+            parent_name = getattr(parent, "name", "thread")
+            return f"{message.guild.name}#{parent_name}/{channel.name}"
+        channel_name = getattr(channel, "name", None)
+        if channel_name:
+            return f"{message.guild.name}#{channel_name}"
+        return message.guild.name
 
     async def safe_set_presence(self) -> None:
-        """Apply the configured presence once the gateway is ready."""
+        # Apply the configured presence once the gateway is ready.
 
         presence = self._config.discord.presence_message
         if not presence:
@@ -115,10 +133,19 @@ class DiscordSelfBot(discord.Client):
         ws = getattr(self, "ws", None)
         if ws is None:
             logger.debug("Gateway websocket unavailable; skipping presence update.")
+            if self._ui:
+                self._ui.notify_event(
+                    "Skipping presence update until gateway is ready.",
+                    icon="⚠",
+                    style="yellow",
+                    force=True,
+                )
             return
         activity = discord.Activity(type=discord.ActivityType.listening, name=presence)
+        applied = False
         try:
             await self.change_presence(activity=activity)
+            applied = True
         except AttributeError:
             logger.debug("Gateway not ready during presence update; retrying once.")
             await asyncio.sleep(1)
@@ -127,11 +154,27 @@ class DiscordSelfBot(discord.Client):
                 logger.debug("Gateway websocket still unavailable; skipping presence update.")
                 return
             await self.change_presence(activity=activity)
+            applied = True
+        if applied and self._ui:
+            self._ui.notify_event(
+                f"Presence set to [italic]{presence}[/]",
+                icon="🎧",
+                style="magenta",
+                force=True,
+            )
 
     async def on_ready(self) -> None:
         if self.user is None:
             return
         logger.info("Logged in as %s (%s).", self.user.name, self.user.id)
+        if self._ui:
+            self._ui.mark_ready(self.user.name, self.user.id, len(self.guilds))
+            self._ui.notify_event(
+                f"Connected as [bold]{self.user.name}[/] ({self.user.id})",
+                icon="✅",
+                style="green",
+                force=True,
+            )
         asyncio.create_task(self.safe_set_presence())
 
     async def on_message(self, message: Message) -> None:  # noqa: D401 - discord signature
@@ -144,6 +187,18 @@ class DiscordSelfBot(discord.Client):
         if message.author.bot:
             return
 
+        author_display = message.author.display_name or message.author.name
+        author_markup = escape(author_display)
+        channel_label = escape(self._describe_channel(message))
+
+        if self._ui:
+            self._ui.increment_messages()
+            self._ui.notify_event(
+                f"Message from [bold]{author_markup}[/] in [italic]{channel_label}[/]",
+                icon="✉️",
+                style="cyan",
+            )
+
         whitelist_result = self._whitelist.evaluate(message)
         if not whitelist_result.allow:
             logger.debug(
@@ -152,6 +207,13 @@ class DiscordSelfBot(discord.Client):
                 message.channel.id,
                 whitelist_result.reason,
             )
+            if self._ui:
+                reason = escape(whitelist_result.reason or "blocked")
+                self._ui.notify_event(
+                    f"Blocked message from [bold]{author_markup}[/] — {reason}.",
+                    icon="🔒",
+                    style="yellow",
+                )
             return
 
         decision = self._decider.decide(message, self.user)
@@ -161,36 +223,74 @@ class DiscordSelfBot(discord.Client):
                 message.id,
                 decision.reason,
             )
-            self._conversation_store.append(message.channel.id, str(message.author.display_name), message.content)
+            self._conversation_store.append(message.channel.id, author_display, message.content)
+            if self._ui:
+                reason = escape(decision.reason or "no trigger")
+                self._ui.notify_event(
+                    f"Ignored message from [bold]{author_markup}[/] — {reason}.",
+                    icon="💤",
+                    style="grey50",
+                )
             return
 
         try:
             reply = await self._generate_reply(message)
         except Exception as exc:  # pragma: no cover - runtime API failures
             logger.exception("Failed to produce reply: %s", exc)
+            if self._ui:
+                self._ui.notify_event(
+                    f"Failed to produce reply for [bold]{author_markup}[/].",
+                    icon="⚠",
+                    style="red",
+                    force=True,
+                )
             return
 
         if not reply.strip():
             logger.debug("AI returned empty reply for message %s.", message.id)
+            if self._ui:
+                self._ui.notify_event(
+                    f"AI returned an empty reply for [bold]{author_markup}[/].",
+                    icon="⚠",
+                    style="yellow",
+                    force=True,
+                )
             return
 
         await message.channel.send(reply)
         self._decider.register_reply(message.channel.id)
         self._conversation_store.append(message.channel.id, "bot", reply)
+        if self._ui:
+            self._ui.increment_replies()
+            self._ui.notify_event(
+                f"Responded to [bold]{author_markup}[/] in [italic]{channel_label}[/]",
+                icon="🤖",
+                style="green",
+                force=True,
+            )
 
     async def _generate_reply(self, message: Message) -> str:
         author_name = message.author.display_name or message.author.name
         conversation = self._conversation_store.snapshot(message.channel.id)
         self._conversation_store.append(message.channel.id, author_name, message.content)
-        response = await self._ai_service.generate_reply(
+        if self._ui:
+            style = self._ui.STATUS_STYLES.get("BUSY", "magenta")
+            with self._ui.activity("BUSY", style=style):
+                return await self._ai_service.generate_reply(
+                    author_name=author_name,
+                    message_content=message.content,
+                    conversation=conversation,
+                )
+        return await self._ai_service.generate_reply(
             author_name=author_name,
             message_content=message.content,
             conversation=conversation,
         )
-        return response
 
     async def close(self) -> None:
         logger.info("Shutting down self-bot.")
+        if self._ui:
+            self._ui.notify_event("Disconnecting from Discord...", icon="⏻", style="yellow", force=True)
         await super().close()
 
     def __repr__(self) -> str:

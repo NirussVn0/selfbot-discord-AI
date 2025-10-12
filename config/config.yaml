@@ -10,10 +10,10 @@ secrets:
 
 whitelist:
   enabled: true
-  admin_ids: []
-  user_ids: []
+  admin_ids: [1195303714777468988]
+  user_ids: [1195303714777468988]
   guild_ids: []
-  channel_ids: []
+  channel_ids: [1426842762258546720]
   allow_direct_messages: false
   reload_interval_seconds: 300
 

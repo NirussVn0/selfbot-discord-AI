@@ -1,4 +1,4 @@
-"""Entry point for running the self Discord bot."""
+# Entry point for running the self Discord bot.
 
 from __future__ import annotations
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 from logging import Handler
@@ -7,7 +8,24 @@ from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Final
 
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.theme import Theme
+
 from selfbot_discord.config.models import LoggingConfig
+
+SUCCESS_LEVEL = logging.INFO + 5
+logging.addLevelName(SUCCESS_LEVEL, "SUCCESS")
+
+
+def _success(self: logging.Logger, message: object, *args: object, **kwargs: object) -> None:
+    # Log a message with SUCCESS level severity
+
+    if self.isEnabledFor(SUCCESS_LEVEL):
+        self._log(SUCCESS_LEVEL, message, args, **kwargs)
+
+
+setattr(logging.Logger, "success", _success)
 
 
 class JsonLogFormatter(logging.Formatter):
@@ -34,11 +52,54 @@ class JsonLogFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False)
 
 
-def _build_handlers(config: LoggingConfig, formatter: logging.Formatter) -> list[Handler]:
+class RichConsoleFormatter(logging.Formatter):
+    # Formatter that renders colourful Rich log messages
+
+    LEVEL_STYLES: Final[dict[str, str]] = {
+        "DEBUG": "[blue][DEBUG][/]",
+        "INFO": "[cyan][INFO][/]",
+        "SUCCESS": "[green][SUCCESS][/]",
+        "WARNING": "[yellow][WARN][/]",
+        "ERROR": "[red][ERROR][/]",
+        "CRITICAL": "[bold red][CRITICAL][/]",
+    }
+
+    def __init__(self) -> None:
+        super().__init__("%(message)s")
+
+    def format(self, record: logging.LogRecord) -> str:
+        message = super().format(record)
+        timestamp = dt.datetime.now().strftime("%H:%M:%S")
+        level = self.LEVEL_STYLES.get(record.levelname, f"[white][{record.levelname}][/]")
+        return f"[dim]{timestamp}[/] {level} {message}"
+
+
+def _build_console() -> Console:
+    theme = Theme(
+        {
+            "log.level.info": "cyan",
+            "log.level.success": "green",
+            "log.level.warning": "yellow",
+            "log.level.error": "red",
+        }
+    )
+    return Console(theme=theme, highlight=False)
+
+
+def _build_handlers(config: LoggingConfig, console: Console) -> list[Handler]:
     handlers: list[Handler] = []
-    console = logging.StreamHandler()
-    console.setFormatter(formatter)
-    handlers.append(console)
+
+    rich_handler = RichHandler(
+        console=console,
+        markup=True,
+        rich_tracebacks=True,
+        show_path=False,
+        show_time=False,
+        show_level=False,
+    )
+    rich_handler.setFormatter(RichConsoleFormatter())
+    handlers.append(rich_handler)
+
     if config.log_dir:
         log_dir = Path(config.log_dir)
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -48,22 +109,18 @@ def _build_handlers(config: LoggingConfig, formatter: logging.Formatter) -> list
             backupCount=7,
             encoding="utf-8",
         )
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(JsonLogFormatter())
         handlers.append(file_handler)
+
     return handlers
 
 
-def configure_logging(config: LoggingConfig) -> None:
+def configure_logging(config: LoggingConfig, *, console: Console | None = None) -> Console:
+    # Configure logging with colourful console output and JSON file rotation.
 
+    console = console or _build_console()
     level = getattr(logging, config.level.upper(), logging.INFO)
-    formatter: logging.Formatter
-    if config.json_format:
-        formatter = JsonLogFormatter()
-    else:
-        formatter = logging.Formatter(
-            fmt="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-    handlers = _build_handlers(config, formatter)
+    handlers = _build_handlers(config, console)
     logging.basicConfig(level=level, handlers=handlers, force=True)
     logging.getLogger("discord").setLevel(logging.INFO)
+    return console
