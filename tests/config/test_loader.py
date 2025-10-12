@@ -1,4 +1,5 @@
 # Tests for YAML configuration loading.
+# Copyright (c) [2025] NirrussVn0
 
 from __future__ import annotations
 
@@ -6,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from self_discord_bot.config.exceptions import ConfigFileNotFoundError, MalformedConfigurationError
-from self_discord_bot.config.loader import ConfigLoader
+from selfbot_discord.config.exceptions import ConfigFileNotFoundError, MalformedConfigurationError
+from selfbot_discord.config.loader import ConfigLoader
 
 
 def test_loader_reads_valid_yaml(tmp_path: Path) -> None:

@@ -1,4 +1,5 @@
 # Tests for the high-level configuration manager and environment utilities.
+# Copyright (c) [2025] NirrussVn0
 
 from __future__ import annotations
 
@@ -6,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from self_discord_bot.config.environment import EnvironmentManager
-from self_discord_bot.config.exceptions import ConfigurationError, EnvironmentVariableError
-from self_discord_bot.config.manager import ConfigManager
+from selfbot_discord.config.environment import EnvironmentManager
+from selfbot_discord.config.exceptions import ConfigurationError, EnvironmentVariableError
+from selfbot_discord.config.manager import ConfigManager
 
 
 def test_config_manager_resolves_secrets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

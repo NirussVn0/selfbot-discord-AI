@@ -1,21 +1,21 @@
-# Entry point for running the self Discord bot
-# Copyright (c) [2025] NirrussVn0
+#Entry point for running the self Discord bot
 
 from __future__ import annotations
 
 import asyncio
 
-from self_discord_bot import ConfigManager
+from selfbot_discord import ConfigManager
 
 
 async def bootstrap() -> None:
-
+    # Validate configuration before the bot core is initialised
     manager = ConfigManager()
     manager.validate()
     await asyncio.sleep(0)
 
 
 def main() -> None:
+    # Synchronously bootstrap the async entrypoint
     asyncio.run(bootstrap())
 
 

@@ -6,11 +6,11 @@ from pathlib import Path
 
 
 class ConfigurationError(Exception):
-    """Base class for configuration-related errors."""
+    # Base class for configuration-related errors
+    pass
 
 
 class ConfigFileNotFoundError(ConfigurationError):
-    """Raised when the configuration file cannot be located."""
 
     def __init__(self, path: Path) -> None:
         message = f"Configuration file not found at path: {path}"
@@ -19,7 +19,6 @@ class ConfigFileNotFoundError(ConfigurationError):
 
 
 class EnvironmentVariableError(ConfigurationError):
-    """Raised when a required environment variable is missing or invalid."""
 
     def __init__(self, key: str) -> None:
         message = f"Required environment variable '{key}' is not set."
@@ -28,7 +27,6 @@ class EnvironmentVariableError(ConfigurationError):
 
 
 class MalformedConfigurationError(ConfigurationError):
-    """Raised when configuration data cannot be parsed or validated."""
 
     def __init__(self, detail: str) -> None:
         message = f"Malformed configuration: {detail}"

@@ -3,7 +3,7 @@ requires = ["setuptools>=65", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "self-discord-bot"
+name = "selfbot_discord"
 version = "0.1.0"
 description = "Discord self-bot with Google Gemini AI integration."
 requires-python = ">=3.11"
@@ -42,7 +42,7 @@ testpaths = [
 
 [tool.coverage.run]
 branch = true
-source = ["self_discord_bot"]
+source = ["selfbot_discord"]
 omit = ["tests/*"]
 
 [tool.uv]

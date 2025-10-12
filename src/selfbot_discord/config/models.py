@@ -98,7 +98,7 @@ class CacheConfig(BaseModel):
     # Distributed cache configuration.
 
     redis_url: AnyUrl = Field(default="redis://redis:6379/0", description="Connection URL for Redis cache.")
-    namespace: str = Field(default="self_discord_bot", description="Namespace prefix for cache keys.")
+    namespace: str = Field(default="selfbot_discord", description="Namespace prefix for cache keys.")
     default_ttl_seconds: PositiveInt = Field(default=300, description="Default TTL for cached whitelist entries.")
 
 

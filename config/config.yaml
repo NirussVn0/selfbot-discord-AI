@@ -41,5 +41,5 @@ rate_limit:
 
 cache:
   redis_url: redis://redis:6379/0
-  namespace: self_discord_bot
+  namespace: selfbot_discord
   default_ttl_seconds: 300
