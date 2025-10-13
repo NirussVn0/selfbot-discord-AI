@@ -8,6 +8,12 @@ src/selfbot_discord.egg-info/dependency_links.txt
 src/selfbot_discord.egg-info/requires.txt
 src/selfbot_discord.egg-info/top_level.txt
 src/selfbot_discord/ai/gemini.py
+src/selfbot_discord/commands/__init__.py
+src/selfbot_discord/commands/base.py
+src/selfbot_discord/commands/registry.py
+src/selfbot_discord/commands/cogs/__init__.py
+src/selfbot_discord/commands/cogs/general.py
+src/selfbot_discord/commands/cogs/whitelist.py
 src/selfbot_discord/config/__init__.py
 src/selfbot_discord/config/environment.py
 src/selfbot_discord/config/exceptions.py
@@ -15,6 +21,9 @@ src/selfbot_discord/config/loader.py
 src/selfbot_discord/config/manager.py
 src/selfbot_discord/config/models.py
 src/selfbot_discord/core/bot.py
+src/selfbot_discord/services/config_watcher.py
 src/selfbot_discord/services/context.py
 src/selfbot_discord/services/whitelist.py
+src/selfbot_discord/ui/__init__.py
+src/selfbot_discord/ui/console.py
 src/selfbot_discord/utils/logging.py

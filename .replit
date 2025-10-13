@@ -4,3 +4,19 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
+packages = ["libxcrypt", "libyaml"]
+
+[workflows]
+
+[[workflows.workflow]]
+name = "run.sh"
+mode = "parallel"
+author = 27175659
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "chmod +x run.sh"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "./run.sh"
