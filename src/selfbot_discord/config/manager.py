@@ -76,3 +76,9 @@ class ConfigManager:
             missing_keys = ", ".join(missing)
             message = f"Missing required environment secrets: {missing_keys}"
             raise ConfigurationError(message)
+
+    def save(self) -> None:
+        # Persist the in-memory configuration to disk.
+        if self._cached_config is None:
+            raise ConfigurationError("Cannot save configuration before it has been loaded.")
+        self._loader.save(self._cached_config)

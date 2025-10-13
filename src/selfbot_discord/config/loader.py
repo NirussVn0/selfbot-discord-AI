@@ -32,6 +32,12 @@ class ConfigLoader:
         except ValidationError as exc:
             raise MalformedConfigurationError(str(exc)) from exc
 
+    def save(self, config: AppConfig) -> None:
+        # Persist the provided configuration back to disk.
+        payload = config.model_dump(mode="json")
+        with self._config_path.open("w", encoding="utf-8") as config_file:
+            yaml.safe_dump(payload, config_file, sort_keys=False)
+
     def _read_yaml(self) -> dict[str, Any]:
         # Read YAML content from the file system.
         path = self._config_path

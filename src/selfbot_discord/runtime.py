@@ -70,7 +70,7 @@ def run_bot(manager: ConfigManager) -> None:
 
         ui.update_progress("Initialising runtime services")
         with ui.status("Initialising runtime services"):
-            whitelist = WhitelistService(config.whitelist)
+            whitelist = WhitelistService(manager)
             conversation_store = ConversationStore()
             ai_service = GeminiAIService(config.ai, gemini_api_key)
         ui.advance_progress()
@@ -79,6 +79,7 @@ def run_bot(manager: ConfigManager) -> None:
         ui.update_progress("Preparing Discord client")
         client = DiscordSelfBot(
             config,
+            config_manager=manager,
             whitelist=whitelist,
             ai_service=ai_service,
             conversation_store=conversation_store,
