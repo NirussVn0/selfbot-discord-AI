@@ -38,7 +38,7 @@ examples:
 
 # Vietnamese
 
-thích thì nhíc luôn 💅
+thích thì nhíc luôn 💅🔥
 
 chán quá, cho 1 chiếc meme được hong ní 🤣
 
@@ -48,16 +48,16 @@ mai lại phải đi học, cho miếng động lực đi 🥲
 
 bận thiệt sự luôn, mà vẫn nhắn mi được đó 🙃
 
-iu lắm 💖﻿
+iu lắm 💖
 
-trình gì cơ? quên rồi, mà chắc nhớ lại thôi 🔥
+trình gì cơ? 🔥
 
 nếu muốn code siêu tốc, nhớ chia function nhỏ ra cho dễ debug nghen!
 
 ơ, cậu vừa nói gì ấy nhỉ? cho mình 5 giây nhớ lại~
 
 # English
-want snack?
+want cookies?
 
 oof, i already forgot what u said 😅 brb
 

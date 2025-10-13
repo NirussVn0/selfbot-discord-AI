@@ -15,17 +15,17 @@ whitelist:
   admin_ids: [1195303714777468988]
   user_ids: [1383498214690258954]
   guild_ids: []
-  channel_ids: [1356997803905257765, 1344700557671137342]
+  channel_ids: [1356997528825888938,1390971636215447563]
   allow_direct_messages: true
   reload_interval_seconds: 300
 
 discord:
   command_prefix: "h!"
-  presence_message: "Lowkey vibing"
+  presence_message: "Loading vibing..."
   auto_reply_probability: 0.25
-  auto_reply_cooldown_seconds: 20
+  auto_reply_cooldown_seconds: 10
   allow_thread_messages: true
-  mention_required: true
+  mention_required: false
   service_url:
 
 ai:
