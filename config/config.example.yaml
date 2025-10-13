@@ -1,0 +1,47 @@
+# Copyright (c) [2025] NirrussVn0
+
+logging:
+  level: INFO
+  json_format: true
+  log_dir: logs
+  rotation: 1 week
+
+secrets:
+  discord_token: DISCORD_USER_TOKEN
+  gemini_api_key: GOOGLE_GEMINI_API_KEY
+
+whitelist:
+  enabled: true
+  admin_ids: []
+  user_ids: []
+  guild_ids: []
+  channel_ids: []
+  allow_direct_messages: true
+  reload_interval_seconds: 300
+
+discord:
+  command_prefix: "h!"
+  presence_message: "Lowkey vibing"
+  auto_reply_probability: 0.25
+  auto_reply_cooldown_seconds: 20
+  allow_thread_messages: true
+  mention_required: true
+  service_url:
+
+ai:
+  model: gemini-2.5-flash
+  temperature: 1.2
+  top_p: 0.95
+  max_output_tokens: 1024
+  system_prompt_path:
+  persona: custom
+
+rate_limit:
+  messages_per_minute: 60
+  queue_size: 50
+  burst_window_seconds: 15
+
+cache:
+  redis_url: redis://redis:6379/0
+  namespace: selfbot_discord
+  default_ttl_seconds: 300
