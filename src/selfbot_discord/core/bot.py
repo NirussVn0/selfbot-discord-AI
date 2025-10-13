@@ -13,6 +13,11 @@ import discord
 from rich.markup import escape
 
 from selfbot_discord.ai.gemini import GeminiAIService
+from selfbot_discord.commands.base import CommandContext, CommandError
+from selfbot_discord.commands.cogs.general import GeneralCog
+from selfbot_discord.commands.cogs.whitelist import WhitelistCog
+from selfbot_discord.commands.registry import CommandRegistry
+from selfbot_discord.config.manager import ConfigManager
 from selfbot_discord.config.models import AppConfig
 from selfbot_discord.services.context import ConversationStore
 from selfbot_discord.services.whitelist import WhitelistService
@@ -89,6 +94,7 @@ class DiscordSelfBot(discord.Client):
         self,
         config: AppConfig,
         *,
+        config_manager: ConfigManager,
         whitelist: WhitelistService,
         ai_service: GeminiAIService,
         conversation_store: ConversationStore | None = None,
@@ -105,17 +111,15 @@ class DiscordSelfBot(discord.Client):
             logger.debug("discord.Intents unavailable; falling back to default discord.Client configuration.")
         super().__init__(**kwargs)
         self._config = config
+        self._config_manager = config_manager
         self._whitelist = whitelist
         self._ai_service = ai_service
         self._conversation_store = conversation_store or ConversationStore()
         self._decider = ResponseDecider(config)
         self._ui = ui
         self._started_at = time.monotonic()
-        self._command_handlers: dict[str, Any] = {
-            "ping": self._command_ping,
-            "help": self._command_help,
-            "status": self._command_status,
-        }
+        self._command_registry = CommandRegistry()
+        self._register_cogs()
 
     @staticmethod
     def _describe_channel(message: "Message") -> str:
@@ -352,79 +356,27 @@ class DiscordSelfBot(discord.Client):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(persona={self._config.ai.persona!r})"
 
-    async def _handle_command(self, message: Message) -> bool:
-        if self.user is None:
-            return False
-        content = message.content or ""
-        prefix = self._config.discord.command_prefix
-        if not prefix or not content.startswith(prefix):
-            return False
+    @property
+    def uptime_seconds(self) -> float:
+        return time.monotonic() - self._started_at
 
-        command_line = content[len(prefix) :].strip()
-        if not command_line:
-            return False
+    async def schedule_ephemeral_cleanup(self, *messages: discord.Message, delay: float = 3.0) -> None:
+        targets = [message for message in messages if message is not None]
+        if not targets:
+            return
 
-        parts = command_line.split()
-        command = parts[0].lower()
-        args = parts[1:]
+        async def _cleanup() -> None:
+            await asyncio.sleep(delay)
+            for message in targets:
+                try:
+                    await message.delete()
+                except (discord.HTTPException, AttributeError):
+                    continue
 
-        author_id = message.author.id
-        is_admin = author_id in self._config.whitelist.admin_ids or author_id == self.user.id
-        if not is_admin:
-            await message.channel.send("You do not have permission to use self-bot commands.")
-            return True
-
-        handler = self._command_handlers.get(command)
-        if handler is None:
-            await message.channel.send(f"Unknown command `{command}`. Try `{prefix}help`.")
-            return True
-
-        try:
-            await handler(message, args)
-        finally:
-            if self._ui:
-                self._ui.increment_commands()
-                self._ui.notify_event(
-                    f"Executed command `{command}` for [bold]{escape(message.author.display_name or message.author.name)}[/].",
-                    icon="🛠",
-                    style="green",
-                    force=True,
-                )
-        return True
-
-    async def _command_ping(self, message: Message, _: list[str]) -> None:
-        latency_ms = getattr(self, "latency", 0.0) * 1000
-        await message.channel.send(f"Pong! 🏓 `{latency_ms:.0f} ms`")
-
-    async def _command_help(self, message: Message, _: list[str]) -> None:
-        prefix = self._config.discord.command_prefix
-        help_text = (
-            "Available commands:\n"
-            f"- `{prefix}ping`: check if the self-bot is responsive.\n"
-            f"- `{prefix}status`: show current bot status and uptime.\n"
-            f"- `{prefix}help`: display this help message.\n"
-            f"AI replies still follow whitelist and mention rules."
-        )
-        await message.channel.send(help_text)
-
-    async def _command_status(self, message: Message, _: list[str]) -> None:
-        uptime_seconds = time.monotonic() - self._started_at
-        latency_ms = getattr(self, "latency", 0.0) * 1000
-        persona = self._config.ai.persona
-        guilds = len(self.guilds)
-        user_display = f"{self.user.name} ({self.user.id})" if self.user else "Unknown"
-        status_text = (
-            "🤖 **Self-Bot Status**\n"
-            f"• User: `{user_display}`\n"
-            f"• Persona: `{persona}`\n"
-            f"• Servers: `{guilds}`\n"
-            f"• Latency: `{latency_ms:.0f} ms`\n"
-            f"• Uptime: `{self._format_duration(uptime_seconds)}`"
-        )
-        await message.channel.send(status_text)
+        asyncio.create_task(_cleanup())
 
     @staticmethod
-    def _format_duration(seconds: float) -> str:
+    def format_duration(seconds: float) -> str:
         seconds = int(max(seconds, 0))
         days, rem = divmod(seconds, 86400)
         hours, rem = divmod(rem, 3600)
@@ -438,3 +390,63 @@ class DiscordSelfBot(discord.Client):
             parts.append(f"{minutes}m")
         parts.append(f"{secs}s")
         return " ".join(parts)
+
+    def _register_cogs(self) -> None:
+        cogs = [GeneralCog(self), WhitelistCog(self)]
+        for cog in cogs:
+            self._command_registry.register_cog(cog)
+
+    async def _handle_command(self, message: Message) -> bool:
+        if self.user is None:
+            return False
+        content = message.content or ""
+        prefix = self._config.discord.command_prefix
+        if not prefix or not content.startswith(prefix):
+            return False
+
+        command_line = content[len(prefix) :].strip()
+        if not command_line:
+            return False
+
+        parts = command_line.split()
+        command_name = parts[0].lower()
+        args = parts[1:]
+
+        author_id = message.author.id
+        is_admin = author_id in self._config.whitelist.admin_ids or author_id == self.user.id
+        if not is_admin:
+            response = await message.channel.send("You do not have permission to use self-bot commands.")
+            await self.schedule_ephemeral_cleanup(message, response, delay=3.0)
+            return True
+
+        context = CommandContext(
+            bot=self,
+            message=message,
+            args=args,
+            config_manager=self._config_manager,
+            whitelist=self._whitelist,
+            registry=self._command_registry,
+            ui=self._ui,
+        )
+
+        try:
+            handled = await self._command_registry.execute(command_name, context)
+        except CommandError as exc:
+            response = await context.respond(str(exc))
+            await self.schedule_ephemeral_cleanup(message, response, delay=3.0)
+            return True
+
+        if not handled:
+            response = await message.channel.send(f"Unknown command `{command_name}`. Try `{prefix}help`.")
+            await self.schedule_ephemeral_cleanup(message, response, delay=3.0)
+            return True
+
+        if self._ui:
+            self._ui.increment_commands()
+            self._ui.notify_event(
+                f"Executed command `{command_name}` for [bold]{escape(message.author.display_name or message.author.name)}[/].",
+                icon="🛠",
+                style="green",
+                force=True,
+            )
+        return True
