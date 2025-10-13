@@ -21,7 +21,7 @@ class WhitelistCog(Cog):
         if action == "show":
             summary = yaml.safe_dump(service.summary(), sort_keys=False)
             message = await ctx.respond(f"```yaml\n{summary}\n```")
-            await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=3.0)
+            await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
             return
 
         if action in {"true", "false"}:
@@ -29,7 +29,7 @@ class WhitelistCog(Cog):
             changed = service.toggle(enabled)
             text = "Whitelist already in that state." if not changed else f"Whitelist enabled set to {enabled}."
             message = await ctx.respond(text)
-            await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=3.0)
+            await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
             return
 
         if action in {"add", "rm"}:
@@ -59,4 +59,4 @@ class WhitelistCog(Cog):
             text = "No IDs were removed." if not changes else f"Removed IDs from `{field}`: {', '.join(map(str, changes))}"
 
         message = await ctx.respond(text)
-        await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=3.0)
+        await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)

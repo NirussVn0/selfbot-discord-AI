@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Sequence
 
-import yaml
+import json
 
 from selfbot_discord.commands.base import Cog, CommandContext, CommandError, command
 
@@ -46,6 +47,28 @@ class GeneralCog(Cog):
     @command("setting", description="Show the current configuration snapshot.")
     async def setting(self, ctx: CommandContext) -> None:
         config_dict = ctx.config_manager.as_dict()
-        yaml_dump = yaml.safe_dump(config_dict, sort_keys=False)
-        message = await ctx.respond(f"```yaml\n{yaml_dump}\n```")
-        await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=3.0)
+        payload = json.dumps(config_dict, indent=2, default=str)
+        message = await ctx.respond(f"```json\n{payload}\n```")
+        await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
+
+    @command("log", description="Show recent log entries.")
+    async def log(self, ctx: CommandContext) -> None:
+        logging_config = ctx.config_manager.config.logging
+        log_dir = logging_config.log_dir or Path("logs")
+        log_dir_path = Path(log_dir)
+        log_file = log_dir_path / "selfbot.log"
+        if not log_file.exists():
+            message = await ctx.respond("No log file found.")
+            await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
+            return
+
+        lines = log_file.read_text(encoding="utf-8").splitlines()
+        recent = lines[-10:] if lines else []
+        if not recent:
+            message = await ctx.respond("Log file is empty.")
+            await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
+            return
+
+        snippet = "\n".join(recent)
+        message = await ctx.respond(f"```text\n{snippet}\n```")
+        await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)

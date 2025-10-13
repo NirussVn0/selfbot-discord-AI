@@ -360,7 +360,7 @@ class DiscordSelfBot(discord.Client):
     def uptime_seconds(self) -> float:
         return time.monotonic() - self._started_at
 
-    async def schedule_ephemeral_cleanup(self, *messages: discord.Message, delay: float = 3.0) -> None:
+    async def schedule_ephemeral_cleanup(self, *messages: discord.Message, delay: float = 5.0) -> None:
         targets = [message for message in messages if message is not None]
         if not targets:
             return
@@ -416,7 +416,7 @@ class DiscordSelfBot(discord.Client):
         is_admin = author_id in self._config.whitelist.admin_ids or author_id == self.user.id
         if not is_admin:
             response = await message.channel.send("You do not have permission to use self-bot commands.")
-            await self.schedule_ephemeral_cleanup(message, response, delay=3.0)
+            await self.schedule_ephemeral_cleanup(message, response, delay=5.0)
             return True
 
         context = CommandContext(
@@ -433,12 +433,12 @@ class DiscordSelfBot(discord.Client):
             handled = await self._command_registry.execute(command_name, context)
         except CommandError as exc:
             response = await context.respond(str(exc))
-            await self.schedule_ephemeral_cleanup(message, response, delay=3.0)
+            await self.schedule_ephemeral_cleanup(message, response, delay=5.0)
             return True
 
         if not handled:
             response = await message.channel.send(f"Unknown command `{command_name}`. Try `{prefix}help`.")
-            await self.schedule_ephemeral_cleanup(message, response, delay=3.0)
+            await self.schedule_ephemeral_cleanup(message, response, delay=5.0)
             return True
 
         if self._ui:
