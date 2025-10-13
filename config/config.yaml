@@ -25,7 +25,7 @@ discord:
   auto_reply_probability: 0.25
   auto_reply_cooldown_seconds: 10
   allow_thread_messages: true
-  mention_required: false
+  mention_required: true
   service_url:
 
 ai:
