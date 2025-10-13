@@ -12,7 +12,6 @@ from .exceptions import EnvironmentVariableError
 
 
 class EnvironmentManager:
-    # Loads and validates environment variables for the application.
 
     def __init__(self, dotenv_path: Path | None = Path(".env"), *, auto_load: bool = True, override: bool = False) -> None:
         # Create a new environment manager.
@@ -23,7 +22,6 @@ class EnvironmentManager:
 
     @property
     def dotenv_path(self) -> Path | None:
-        # Return the configured dotenv path.
         return self._dotenv_path
 
     def load(self) -> None:
@@ -31,7 +29,6 @@ class EnvironmentManager:
         load_dotenv(dotenv_path=self._dotenv_path, override=self._override)
 
     def get(self, key: str, default: str | None = None) -> str | None:
-        # Return the value of an environment variable.
         return os.getenv(key, default)
 
     def require(self, key: str) -> str:

@@ -19,6 +19,7 @@ from selfbot_discord.commands.cogs.whitelist import WhitelistCog
 from selfbot_discord.commands.registry import CommandRegistry
 from selfbot_discord.config.manager import ConfigManager
 from selfbot_discord.config.models import AppConfig
+from selfbot_discord.services.config_watcher import ConfigWatcher
 from selfbot_discord.services.context import ConversationStore
 from selfbot_discord.services.whitelist import WhitelistService
 from selfbot_discord.ui import ConsoleUI
@@ -120,6 +121,11 @@ class DiscordSelfBot(discord.Client):
         self._started_at = time.monotonic()
         self._command_registry = CommandRegistry()
         self._register_cogs()
+        self._config_watcher = ConfigWatcher(
+            config_manager,
+            on_reload=self.apply_configuration,
+            ui=self._ui,
+        )
 
     @staticmethod
     def _describe_channel(message: "Message") -> str:
@@ -208,6 +214,7 @@ class DiscordSelfBot(discord.Client):
                 style="green",
                 force=True,
             )
+        self._config_watcher.start()
         asyncio.create_task(self.safe_set_presence())
 
     async def on_message(self, message: Message) -> None:  # noqa: D401 - discord signature
@@ -351,6 +358,7 @@ class DiscordSelfBot(discord.Client):
         logger.info("Shutting down self-bot.")
         if self._ui:
             self._ui.notify_event("Disconnecting from Discord...", icon="⏻", style="yellow", force=True)
+        await self._config_watcher.stop()
         await super().close()
 
     def __repr__(self) -> str:
@@ -395,6 +403,18 @@ class DiscordSelfBot(discord.Client):
         cogs = [GeneralCog(self), WhitelistCog(self)]
         for cog in cogs:
             self._command_registry.register_cog(cog)
+
+    async def apply_configuration(self, config: AppConfig) -> None:
+        self._config = config
+        self._decider = ResponseDecider(config)
+        if self._ui:
+            self._ui.notify_event(
+                "Configuration applied from disk.",
+                icon="🔄",
+                style="cyan",
+                force=True,
+            )
+        asyncio.create_task(self.safe_set_presence())
 
     async def _handle_command(self, message: Message) -> bool:
         if self.user is None:

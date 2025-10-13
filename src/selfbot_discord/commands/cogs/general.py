@@ -27,7 +27,7 @@ class GeneralCog(Cog):
             raise CommandError("Bot user not ready.")
         user_display = f"{bot.user.name} ({bot.user.id})"
         status_text = (
-            "🤖 **Self-Bot Status**\n"
+            "🤖 **Hikari Self-Bot Status**\n"
             f"• User: `{user_display}`\n"
             f"• Persona: `{persona}`\n"
             f"• Servers: `{guilds}`\n"
@@ -70,5 +70,7 @@ class GeneralCog(Cog):
             return
 
         snippet = "\n".join(recent)
+        if len(snippet) > 1800:
+            snippet = snippet[-1800:]
         message = await ctx.respond(f"```text\n{snippet}\n```")
         await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)

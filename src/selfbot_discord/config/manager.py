@@ -28,43 +28,40 @@ class ConfigManager:
 
     @property
     def config(self) -> AppConfig:
-        # Return the cached application configuration, loading it if necessary.
         if self._cached_config is None:
             self._cached_config = self._loader.load()
         return self._cached_config
+
+    @property
+    def path(self) -> Path:
+        return self._loader.path
 
     def reload(self) -> AppConfig:
         # Force reload of configuration from disk.
         self._cached_config = self._loader.load()
         return self._cached_config
 
-    def require_secret(self, env_key: str) -> str:
-        # Retrieve a required secret from the environment.
+    def require_secret(self, env_key: str) -> str: # Retrieve a required secret from the environment.
         return self._environment.require(env_key)
 
     def resolve_discord_token(self) -> str:
-        # Return the Discord token using the configured environment variable name.
         env_key = self.config.secrets.discord_token
         return self.require_secret(env_key)
 
     def resolve_gemini_api_key(self) -> str:
-        # Return the Gemini API key using the configured environment variable name.
         env_key = self.config.secrets.gemini_api_key
         return self.require_secret(env_key)
 
-    def as_dict(self) -> dict[str, Any]:
-        # Return a serialisable view of the loaded configuration.
+    def as_dict(self) -> dict[str, Any]: # Return a serialisable view of the loaded configuration.
         return self.config.model_dump()
 
     def is_whitelist_enabled(self) -> bool:
-        # Determine whether whitelist enforcement should be active.
         override = self._environment.get("WHITELIST_ENABLED")
         if override is None:
             return self.config.whitelist.enabled
         return override.strip().lower() in {"1", "true", "yes", "on"}
 
-    def validate(self) -> None:
-        # Eagerly validate the configuration and mandatory secrets.
+    def validate(self) -> None: # Eagerly validate the configuration and mandatory secrets.
         config = self.config
         missing: list[str] = []
         for key in (config.secrets.discord_token, config.secrets.gemini_api_key):
@@ -77,8 +74,7 @@ class ConfigManager:
             message = f"Missing required environment secrets: {missing_keys}"
             raise ConfigurationError(message)
 
-    def save(self) -> None:
-        # Persist the in-memory configuration to disk.
+    def save(self) -> None: # Persist the in-memory configuration to disk.
         if self._cached_config is None:
             raise ConfigurationError("Cannot save configuration before it has been loaded.")
         self._loader.save(self._cached_config)
