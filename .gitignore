@@ -1,8 +1,7 @@
 # Virtual environments
 .venv/
 
-!config/config.example.yaml
-config/config.yaml
+*/config.yaml
 
 abc_CONTEXT.md
 # Python cache
