@@ -15,7 +15,7 @@ whitelist:
   admin_ids: [1195303714777468988]
   user_ids: [1383498214690258954]
   guild_ids: []
-  channel_ids: [1356997528825888938,1390971636215447563]
+  channel_ids: [1356997528825888938,1390971636215447563,]
   allow_direct_messages: true
   reload_interval_seconds: 300
 
