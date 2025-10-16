@@ -36,6 +36,7 @@ ai:
   max_output_tokens: 1024
   system_prompt_path:
   persona: custom
+  empty_reply_fallback: "wait wait..."
 
 rate_limit:
   messages_per_minute: 60
