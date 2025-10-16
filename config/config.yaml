@@ -13,9 +13,9 @@ secrets:
 whitelist:
   enabled: true
   admin_ids: [1195303714777468988]
-  user_ids: [1383498214690258954]
+  user_ids: []
   guild_ids: []
-  channel_ids: [1356997528825888938,1390971636215447563]
+  channel_ids: []
   allow_direct_messages: true
   reload_interval_seconds: 300
 
@@ -23,8 +23,9 @@ discord:
   command_prefix: "h!"
   presence_message: "Loading vibing..."
   auto_reply_probability: 0.25
-  auto_reply_cooldown_seconds: 10
-  allow_thread_messages: true
+  auto_reply_min_length: 10
+  auto_reply_cooldown_seconds: 20
+  allow_thread_messages: false
   mention_required: true
   service_url:
 
