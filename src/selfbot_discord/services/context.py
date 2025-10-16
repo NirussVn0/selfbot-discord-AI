@@ -7,7 +7,6 @@ from typing import Deque, Iterable
 
 
 class ConversationStore:
-    # Maintain a bounded chat history for each Discord channel.
 
     def __init__(self, max_messages: int = 10) -> None:
         self._max_messages = max_messages
