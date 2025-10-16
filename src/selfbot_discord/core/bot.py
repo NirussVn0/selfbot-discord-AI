@@ -310,18 +310,29 @@ class DiscordSelfBot(discord.Client):
                     style="yellow",
                     force=True,
                 )
-            fallback = "Sorry, I couldn't think of a response right now."
-            await message.channel.send(fallback)
-            self._decider.register_reply(message.channel.id)
-            self._conversation_store.append(message.channel.id, "bot", fallback)
-            if self._ui:
-                self._ui.increment_replies()
-                self._ui.notify_event(
-                    f"Sent fallback reply to [bold]{author_markup}[/].",
-                    icon="🛟",
-                    style="yellow",
-                    force=True,
-                )
+            fallback = self._config.ai.empty_reply_fallback or ""
+            fallback = fallback.strip()
+            if fallback:
+                await message.channel.send(fallback)
+                self._decider.register_reply(message.channel.id)
+                self._conversation_store.append(message.channel.id, "bot", fallback)
+                if self._ui:
+                    self._ui.increment_replies()
+                    self._ui.notify_event(
+                        f"Sent fallback reply to [bold]{author_markup}[/].",
+                        icon="🛟",
+                        style="yellow",
+                        force=True,
+                    )
+            else:
+                logger.debug("Skipping fallback reply; no fallback message configured.")
+                if self._ui:
+                    self._ui.notify_event(
+                        f"Skipped fallback reply to [bold]{author_markup}[/].",
+                        icon="🛟",
+                        style="grey50",
+                        force=True,
+                    )
             return
 
         await message.channel.send(reply)

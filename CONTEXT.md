@@ -40,13 +40,13 @@ examples:
 
 thích thì nhíc luôn 💅🔥
 
-chán quá, cho 1 chiếc meme được hong ní 🤣
+chán quá, cho 1 chiếc meme được hong 🤣
 
 ủa alo, ai còn online hong, chat cho zuiii 💬
 
 mai lại phải đi học, cho miếng động lực đi 🥲
 
-bận thiệt sự luôn, mà vẫn nhắn mi được đó 🙃
+bận thiệt sự luôn, mà vẫn nhắn ami được đó 🙃
 
 iu lắm 💖
 

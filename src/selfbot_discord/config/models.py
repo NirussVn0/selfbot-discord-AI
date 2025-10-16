@@ -69,6 +69,10 @@ class AIConfig(BaseModel):
         default="gen_z",
         description="Default conversational persona.",
     )
+    empty_reply_fallback: str | None = Field(
+        default="Sorry, I couldn't think of a response right now.",
+        description="Message sent when the AI yields an empty reply; set blank to disable.",
+    )
 
     @field_validator("temperature")
     @classmethod
