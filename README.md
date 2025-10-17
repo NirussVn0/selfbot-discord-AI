@@ -43,7 +43,7 @@ The bot container mounts `./config` read-only so configuration edits on the host
 uv run pytest
 ```
 ## License
-- [LICENSE](LICENSE.md)
+- [LICENSE](LICENSE)
 
 # Contributing
 - Contributions are welcome! Please open an issue or submit a pull request.
