@@ -22,17 +22,24 @@ class ParseResult:
 class OWOMessageParser:
     OWO_BOT_ID = 408785106942164992
 
-    WIN_PATTERN = re.compile(r":head:.*?won.*?:cowoncy:\s*(\d[\d,]*)", re.IGNORECASE)
-    LOSS_PATTERN = re.compile(r":tail:.*?lost it all.*?:c", re.IGNORECASE)
-    COOLDOWN_PATTERN = re.compile(r"slow down|cooldown|wait", re.IGNORECASE)
-    BALANCE_PATTERN = re.compile(r"cowoncy.*?(\d[\d,]*)", re.IGNORECASE)
+    WIN_PATTERN = re.compile(r"you won.*?(\d[\d,]*)", re.IGNORECASE)
+    LOSS_PATTERN = re.compile(r"lost it all", re.IGNORECASE)
+    COOLDOWN_PATTERN = re.compile(r"slow down|cooldown|wait|please wait", re.IGNORECASE)
+    BALANCE_PATTERN = re.compile(r"you currently have\s*([\d,]+)", re.IGNORECASE)
 
     @classmethod
     def parse_coinflip_result(cls, message: discord.Message) -> ParseResult:
         if message.author.id != cls.OWO_BOT_ID:
             return ParseResult(is_owo_response=False)
 
-        content = message.content.lower()
+        content = message.content
+
+        if cls.COOLDOWN_PATTERN.search(content):
+            return ParseResult(
+                is_owo_response=True,
+                is_cooldown=True,
+                confidence=0.9,
+            )
 
         win_match = cls.WIN_PATTERN.search(content)
         if win_match:
@@ -53,13 +60,6 @@ class OWOMessageParser:
                 is_owo_response=True,
                 is_loss=True,
                 confidence=1.0,
-            )
-
-        if cls.COOLDOWN_PATTERN.search(content):
-            return ParseResult(
-                is_owo_response=True,
-                is_cooldown=True,
-                confidence=0.9,
             )
 
         return ParseResult(is_owo_response=False)

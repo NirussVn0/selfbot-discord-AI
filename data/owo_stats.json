@@ -1,0 +1,12 @@
+{
+  "total_games": 0,
+  "total_wins": 0,
+  "total_losses": 0,
+  "total_money_won": 0,
+  "total_money_lost": 0,
+  "highest_win": 0,
+  "highest_loss_streak": 0,
+  "current_loss_streak": 0,
+  "session_start": "2026-01-09T23:45:59.000487",
+  "session_end": null
+}

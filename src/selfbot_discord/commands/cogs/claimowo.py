@@ -48,7 +48,7 @@ class ClaimOWOCog(Cog):
         if amount <= 0:
             raise CommandError("Bet amount must be greater than 0.")
 
-        if self.game_service.state.name == "RUNNING":
+        if self._game_task and not self._game_task.done():
             raise CommandError("A game is already running. Use `stop` to end it first.")
 
         self.game_service.start_game(ctx.message.channel, amount)
@@ -73,7 +73,7 @@ class ClaimOWOCog(Cog):
             )
 
     async def _handle_stop(self, ctx: CommandContext) -> None:
-        if self.game_service.state.name != "RUNNING":
+        if not self._game_task or self._game_task.done():
             raise CommandError("No game is currently running.")
 
         self.game_service.stop_game()
