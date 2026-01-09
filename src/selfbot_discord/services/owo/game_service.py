@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from typing import TYPE_CHECKING
 
 from selfbot_discord.services.owo.models import (
@@ -74,10 +75,16 @@ class OWOGameService:
 
         self._pending_bet = OWOBet(amount=bet_amount, result=BetResult.PENDING)
 
+        coin_side = random.choice(["h", "t"])
+        side_name = "heads" if coin_side == "h" else "tails"
+
+        human_delay = random.uniform(0.3, 1.5)
+        await asyncio.sleep(human_delay)
+
         for attempt in range(self.max_retries):
             try:
-                await self.channel.send(f"owocf {bet_amount}")
-                logger.info("Placed bet of %d (attempt %d/%d)", bet_amount, attempt + 1, self.max_retries)
+                await self.channel.send(f"owocf {bet_amount} {coin_side}")
+                logger.info("Placed bet of %d on %s (attempt %d/%d)", bet_amount, side_name, attempt + 1, self.max_retries)
                 self.state = OWOGameState.COOLDOWN
                 return True
             except Exception as exc:
@@ -161,6 +168,7 @@ class OWOGameService:
                 self.state = OWOGameState.RUNNING
                 continue
 
-            await asyncio.sleep(self.cooldown_seconds + 1)
+            random_cooldown = self.cooldown_seconds + random.uniform(1.0, 4.0)
+            await asyncio.sleep(random_cooldown)
 
         logger.info("Game loop ended")
