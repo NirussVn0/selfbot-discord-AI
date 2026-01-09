@@ -74,17 +74,17 @@ class OWOGameService:
             return False
 
         self._pending_bet = OWOBet(amount=bet_amount, result=BetResult.PENDING)
-
-        coin_side = random.choice(["h", "t"])
-        side_name = "heads" if coin_side == "h" else "tails"
-
-        human_delay = random.uniform(0.3, 1.5)
-        await asyncio.sleep(human_delay)
+        
+        # Randomize side: 'h' for heads, 't' for tails
+        side = random.choice(["h", "t"])
 
         for attempt in range(self.max_retries):
             try:
-                await self.channel.send(f"owocf {bet_amount} {coin_side}")
-                logger.info("Placed bet of %d on %s (attempt %d/%d)", bet_amount, side_name, attempt + 1, self.max_retries)
+                # Add a small random delay before typing (0.5 - 1.5s) to simulate human
+                await asyncio.sleep(random.uniform(0.5, 1.5))
+                
+                await self.channel.send(f"owocf {bet_amount} {side}")
+                logger.info("Placed bet of %d on %s (attempt %d/%d)", bet_amount, side, attempt + 1, self.max_retries)
                 self.state = OWOGameState.COOLDOWN
                 return True
             except Exception as exc:
@@ -107,7 +107,8 @@ class OWOGameService:
 
         if parse_result.is_cooldown:
             logger.info("Cooldown detected, will retry after delay")
-            await asyncio.sleep(self.retry_delay_seconds)
+            # Wait a bit longer than the requested cooldown to be safe
+            await asyncio.sleep(self.retry_delay_seconds + 1.0)
             self._result_received.set()
             return False
 
@@ -147,7 +148,7 @@ class OWOGameService:
         await self.channel.send("owocash")
         await asyncio.sleep(2)
 
-        while self.state == OWOGameState.RUNNING and not self._stop_requested:
+        while (not self._stop_requested) and (self.state == OWOGameState.RUNNING or self.state == OWOGameState.COOLDOWN):
             bet_amount = self.strategy.current_bet if self.strategy else 0
             
             if bet_amount > self.current_balance and self.current_balance > 0:
@@ -156,6 +157,7 @@ class OWOGameService:
                 break
 
             self._result_received.clear()
+            self.state = OWOGameState.RUNNING  # Ensure we are in running state before placing bet
             
             if not await self.place_bet():
                 break
@@ -168,7 +170,10 @@ class OWOGameService:
                 self.state = OWOGameState.RUNNING
                 continue
 
-            random_cooldown = self.cooldown_seconds + random.uniform(1.0, 4.0)
-            await asyncio.sleep(random_cooldown)
+            # Randomize cooldown to avoid bot detection
+            # Base 15s (10s cooldown + 5s buffer) + random 1-4s extra
+            sleep_time = 15.0 + random.uniform(1.0, 4.0)
+            logger.info("Sleeping for %.2f seconds", sleep_time)
+            await asyncio.sleep(sleep_time)
 
         logger.info("Game loop ended")
