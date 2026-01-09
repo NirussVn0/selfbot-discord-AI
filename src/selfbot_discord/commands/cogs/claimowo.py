@@ -19,7 +19,6 @@ class ClaimOWOCog(Cog):
         self.game_service = game_service
         self.stats_tracker = stats_tracker
         self._game_task: asyncio.Task | None = None
-        self._message_handler_active = False
 
     @command("claimowo", description="Manage OWO coin flip automation", aliases=["cowo"])
     async def claimowo(self, ctx: CommandContext) -> None:
@@ -63,10 +62,6 @@ class ClaimOWOCog(Cog):
         )
         await ctx.bot.schedule_ephemeral_cleanup(ctx.message, response, delay=10.0)
 
-        if not self._message_handler_active:
-            self._message_handler_active = True
-            self.bot.add_listener(self._on_message_for_game, "on_message")
-
         self._game_task = asyncio.create_task(self.game_service.run_game_loop())
 
         if ctx.ui:
@@ -89,10 +84,6 @@ class ClaimOWOCog(Cog):
                 await self._game_task
             except asyncio.CancelledError:
                 pass
-
-        if self._message_handler_active:
-            self.bot.remove_listener(self._on_message_for_game, "on_message")
-            self._message_handler_active = False
 
         stats = self.stats_tracker.get_stats()
         response = await ctx.respond(
@@ -146,8 +137,11 @@ class ClaimOWOCog(Cog):
             f"• Highest Win: `{stats.highest_win:,}` cowoncy"
         )
 
-    async def _on_message_for_game(self, message: Message) -> None:
+    async def process_owo_message(self, message: Message) -> None:
         if message.author.id != 408785106942164992:
+            return
+
+        if self.game_service.channel is None:
             return
 
         if message.channel.id != self.game_service.channel.id:

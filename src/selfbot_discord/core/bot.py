@@ -122,6 +122,7 @@ class DiscordSelfBot(discord.Client):
         self._ui = ui
         self._started_at = time.monotonic()
         self._command_registry = CommandRegistry()
+        self._owo_cog = None
         self._register_cogs()
         self._config_watcher = ConfigWatcher(
             config_manager,
@@ -227,6 +228,8 @@ class DiscordSelfBot(discord.Client):
             self._conversation_store.append(message.channel.id, "me", message.content)
             return
         if message.author.bot:
+            if message.author.id == 408785106942164992 and self._owo_cog:
+                await self._owo_cog.process_owo_message(message)
             return
 
         author_display = message.author.display_name or message.author.name
@@ -415,10 +418,11 @@ class DiscordSelfBot(discord.Client):
     def _register_cogs(self) -> None:
         stats_tracker = OWOStatsTracker()
         game_service = OWOGameService(stats_tracker)
+        self._owo_cog = ClaimOWOCog(self, game_service, stats_tracker)
         cogs = [
             GeneralCog(self),
             WhitelistCog(self),
-            ClaimOWOCog(self, game_service, stats_tracker),
+            self._owo_cog,
         ]
         for cog in cogs:
             self._command_registry.register_cog(cog)
