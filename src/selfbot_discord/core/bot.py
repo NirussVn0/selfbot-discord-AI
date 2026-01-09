@@ -432,12 +432,16 @@ class DiscordSelfBot(discord.Client):
         self._decider = ResponseDecider(config)
         if self._ui:
             self._ui.notify_event(
-                "Configuration applied from disk.",
-                icon="🔄",
-                style="cyan",
-                force=True,
             )
         asyncio.create_task(self.safe_set_presence())
+
+    async def on_message_edit(self, before: Message, after: Message) -> None:
+        """Handle message edit events."""
+        if after.author.bot:
+            if after.author.id == 408785106942164992 and self._owo_cog:
+                # OWO bot often edits the message to show the result
+                await self._owo_cog.process_owo_message(after)
+            return
 
     async def _handle_command(self, message: Message) -> bool:
         if self.user is None:
