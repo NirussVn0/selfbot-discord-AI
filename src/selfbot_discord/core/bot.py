@@ -14,6 +14,7 @@ from rich.markup import escape
 
 from selfbot_discord.ai.gemini import GeminiAIService
 from selfbot_discord.commands.base import CommandContext, CommandError
+from selfbot_discord.commands.cogs.claimowo import ClaimOWOCog
 from selfbot_discord.commands.cogs.general import GeneralCog
 from selfbot_discord.commands.cogs.whitelist import WhitelistCog
 from selfbot_discord.commands.registry import CommandRegistry
@@ -21,6 +22,7 @@ from selfbot_discord.config.manager import ConfigManager
 from selfbot_discord.config.models import AppConfig
 from selfbot_discord.services.config_watcher import ConfigWatcher
 from selfbot_discord.services.context import ConversationStore
+from selfbot_discord.services.owo import OWOGameService, OWOStatsTracker
 from selfbot_discord.services.whitelist import WhitelistService
 from selfbot_discord.ui import ConsoleUI
 
@@ -411,7 +413,13 @@ class DiscordSelfBot(discord.Client):
         return " ".join(parts)
 
     def _register_cogs(self) -> None:
-        cogs = [GeneralCog(self), WhitelistCog(self)]
+        stats_tracker = OWOStatsTracker()
+        game_service = OWOGameService(stats_tracker)
+        cogs = [
+            GeneralCog(self),
+            WhitelistCog(self),
+            ClaimOWOCog(self, game_service, stats_tracker),
+        ]
         for cog in cogs:
             self._command_registry.register_cog(cog)
 
