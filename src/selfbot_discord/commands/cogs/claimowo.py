@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from selfbot_discord.commands.base import Cog, CommandContext, CommandError, command
@@ -104,25 +105,24 @@ class ClaimOWOCog(Cog):
 
     async def _handle_info(self, ctx: CommandContext) -> None:
         stats = self.stats_tracker.get_stats()
-
-        if stats.total_games == 0:
-            response = await ctx.respond("📊 No games played yet. Start with `claimowo <amount>`.")
-            await ctx.bot.schedule_ephemeral_cleanup(ctx.message, response, delay=5.0)
-            return
-
         info_text = self._format_stats(stats)
         response = await ctx.respond(info_text)
         await ctx.bot.schedule_ephemeral_cleanup(ctx.message, response, delay=15.0)
 
     def _format_stats(self, stats) -> str:
         session_duration = "N/A"
-        if stats.session_start and stats.session_end:
-            duration = stats.session_end - stats.session_start
+        if stats.session_start:
+            end_time = stats.session_end or datetime.now()
+            duration = end_time - stats.session_start
             session_duration = str(duration).split(".")[0]
 
+        status = "Running 🟢" if self.game_service.state.name in ("RUNNING", "COOLDOWN") else "Stopped 🔴"
+        current_bet = f"{self.game_service.strategy.current_bet:,}" if self.game_service.strategy else "N/A"
+
         return (
-            "📊 **ClaimOWO Statistics**\n\n"
+            f"📊 **ClaimOWO Statistics** ({status})\n\n"
             f"**Session Info**\n"
+            f"• Current Bet: `{current_bet}`\n"
             f"• Games Played: `{stats.total_games}`\n"
             f"• Session Duration: `{session_duration}`\n\n"
             f"**Win/Loss Ratio**\n"
@@ -147,5 +147,6 @@ class ClaimOWOCog(Cog):
         if message.channel.id != self.game_service.channel.id:
             return
 
+        logger.info("Received OWO message: %r", message.content)
         await self.game_service.process_result(message)
         await self.game_service.update_balance(message)

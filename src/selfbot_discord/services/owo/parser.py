@@ -32,7 +32,19 @@ class OWOMessageParser:
         if message.author.id != cls.OWO_BOT_ID:
             return ParseResult(is_owo_response=False)
 
+        # Check regular content
         content = message.content
+        
+        # Check embeds if content is empty or to supplement
+        if message.embeds:
+            for embed in message.embeds:
+                if embed.description:
+                    content += " " + embed.description
+                if embed.title:
+                    content += " " + embed.title
+
+        # Debug logging to see what the bot actually sees
+        # logger.debug(f"Parsing OWO message: {content!r}")
 
         if cls.COOLDOWN_PATTERN.search(content):
             return ParseResult(
