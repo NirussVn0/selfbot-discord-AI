@@ -38,6 +38,7 @@ class OWOGameService:
         self.current_balance: int = 0
         self._pending_bet: OWOBet | None = None
         self._stop_requested = False
+        self._result_received = asyncio.Event()
 
     def start_game(self, channel: discord.TextChannel, initial_bet: int) -> None:
         if self.state == OWOGameState.RUNNING:
@@ -100,7 +101,7 @@ class OWOGameService:
         if parse_result.is_cooldown:
             logger.info("Cooldown detected, will retry after delay")
             await asyncio.sleep(self.retry_delay_seconds)
-            self.state = OWOGameState.RUNNING
+            self._result_received.set()
             return False
 
         if parse_result.is_win:
@@ -111,6 +112,7 @@ class OWOGameService:
             logger.info("Won %d cowoncy! Resetting to base bet.", parse_result.won_amount)
             self._pending_bet = None
             self.state = OWOGameState.RUNNING
+            self._result_received.set()
             return True
 
         if parse_result.is_loss:
@@ -120,6 +122,7 @@ class OWOGameService:
             logger.info("Lost bet. Next bet will be %d (x3 multiplier)", self.strategy.current_bet)
             self._pending_bet = None
             self.state = OWOGameState.RUNNING
+            self._result_received.set()
             return True
 
         return False
@@ -138,9 +141,26 @@ class OWOGameService:
         await asyncio.sleep(2)
 
         while self.state == OWOGameState.RUNNING and not self._stop_requested:
+            bet_amount = self.strategy.current_bet if self.strategy else 0
+            
+            if bet_amount > self.current_balance and self.current_balance > 0:
+                logger.warning("Insufficient balance (%d) for bet (%d). Stopping game.", self.current_balance, bet_amount)
+                self.stop_game()
+                break
+
+            self._result_received.clear()
+            
             if not await self.place_bet():
                 break
 
-            await asyncio.sleep(self.cooldown_seconds)
+            try:
+                await asyncio.wait_for(self._result_received.wait(), timeout=15.0)
+            except asyncio.TimeoutError:
+                logger.warning("Timeout waiting for OWO response, retrying...")
+                self._pending_bet = None
+                self.state = OWOGameState.RUNNING
+                continue
+
+            await asyncio.sleep(self.cooldown_seconds + 1)
 
         logger.info("Game loop ended")
