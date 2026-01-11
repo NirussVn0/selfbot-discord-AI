@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
+import random
+from typing import Literal
 
 
 class OWOGameState(Enum):
@@ -19,12 +21,26 @@ class BetResult(Enum):
     ERROR = auto()
 
 
+class MultiplierMode(Enum):
+    STATIC = auto()
+    AUTO = auto()
+
+
+class BettingSide(Enum):
+    RANDOM = auto()
+    HEADS = auto()
+    TAILS = auto()
+
+
 @dataclass(slots=True)
 class MartingaleStrategy:
     base_bet: int
     current_bet: int
-    loss_multiplier: float = 3.0
+    multiplier_mode: MultiplierMode = MultiplierMode.STATIC
+    static_multiplier: float = 3.0
     consecutive_losses: int = 0
+    max_bet: int = 250000
+    betting_side: BettingSide = BettingSide.RANDOM
 
     def on_win(self) -> None:
         self.current_bet = self.base_bet
@@ -32,7 +48,37 @@ class MartingaleStrategy:
 
     def on_loss(self) -> None:
         self.consecutive_losses += 1
-        self.current_bet = int(self.current_bet * self.loss_multiplier)
+        
+        multiplier = self.static_multiplier
+        if self.multiplier_mode == MultiplierMode.AUTO:
+            multiplier = self._get_auto_multiplier()
+            
+        next_bet = int(self.current_bet * multiplier)
+        
+        # Cap at max bet
+        if next_bet > self.max_bet:
+            next_bet = self.max_bet
+            
+        self.current_bet = next_bet
+
+    def get_next_side(self) -> Literal["h", "t"]:
+        if self.betting_side == BettingSide.HEADS:
+            return "h"
+        if self.betting_side == BettingSide.TAILS:
+            return "t"
+        return random.choice(["h", "t"])
+
+    def _get_auto_multiplier(self) -> float:
+        # "Start": 0-2 losses -> x2.0 - x2.5
+        if self.consecutive_losses <= 2:
+            return 2.0
+            
+        # "Middle": 3-5 losses -> x3.0 (Recover mode)
+        if self.consecutive_losses <= 5:
+            return 3.0
+            
+        # "End": 6+ losses -> x1.6 (Safety mode to prolong survival)
+        return 1.6
 
     def reset(self) -> None:
         self.current_bet = self.base_bet
