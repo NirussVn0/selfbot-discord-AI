@@ -9,6 +9,7 @@ from selfbot_discord.commands.base import Cog, CommandContext, CommandError, com
 from selfbot_discord.services.owo import OWOGameService, OWOStatsTracker, MultiplierMode, BettingSide
 from selfbot_discord.services.owo.presenter import OWOStatsPresenter
 from selfbot_discord.services.owo.cli import OWOArgParser, OWOUsageError
+from selfbot_discord.services.cleanup import MessageCleaner
 
 if TYPE_CHECKING:
     from discord import Message
@@ -172,22 +173,8 @@ class ClaimOWOCog(Cog):
 
     async def _handle_cleanup(self, ctx: CommandContext) -> None:
         """Clear recent messages from self and OWO bot."""
-        # Simple implementation: purge last 100 messages if author is self or OWO
-        channel = ctx.message.channel
-        deleted = 0
-        try:
-            # Note: history() returns an async iterator
-            async for msg in channel.history(limit=50):
-                if msg.author == ctx.bot.user or msg.author.id == 408785106942164992:
-                    try:
-                        await msg.delete()
-                        deleted += 1
-                        await asyncio.sleep(0.5) # Rate limit protection
-                    except Exception:
-                        pass
-        except Exception as e:
-            logger.error(f"Failed to cleanup messages: {e}")
-            
+        targets = [ctx.bot.user.id, 408785106942164992]
+        deleted = await MessageCleaner.cleanup_channel(ctx.message.channel, 50, target_ids=targets)
         await ctx.respond(f"🧹 Cleared {deleted} messages.", delete_after=3.0)
 
 

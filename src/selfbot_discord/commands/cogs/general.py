@@ -5,9 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
+import asyncio
 import json
 
 from selfbot_discord.commands.base import Cog, CommandContext, CommandError, command
+from selfbot_discord.services.cleanup import MessageCleaner
 
 
 class GeneralCog(Cog):
@@ -23,33 +25,63 @@ class GeneralCog(Cog):
         uptime_seconds = bot.uptime_seconds
         persona = ctx.config_manager.config.ai.persona
         guilds = len(bot.guilds)
-        if bot.user is None:
-            raise CommandError("Bot user not ready.")
-        user_display = f"{bot.user.name} ({bot.user.id})"
-        status_text = (
-            "🤖 **Hikari Self-Bot Status**\n"
-            f"• User: `{user_display}`\n"
-            f"• Persona: `{persona}`\n"
-            f"• Servers: `{guilds}`\n"
-            f"• Latency: `{latency_ms:.0f} ms`\n"
-            f"• Uptime: `{bot.format_duration(uptime_seconds)}`"
+        
+        user_name = bot.user.name if bot.user else "Unknown"
+        user_id = str(bot.user.id) if bot.user else "N/A"
+        duration = bot.format_duration(uptime_seconds)
+
+        await ctx.respond(
+            f"# 🤖 Hikari Status\n"
+            f"**User:** `{user_name}` (`{user_id}`)\n"
+            f"**Persona:** `{persona}`\n"
+            f"**Uptime:** `{duration}`\n"
+            f"**Latency:** `{latency_ms:.0f} ms` | **Servers:** `{guilds}`"
         )
-        await ctx.respond(status_text)
 
     @command("help", description="Display available commands.")
     async def help(self, ctx: CommandContext) -> None:
         prefix = ctx.config_manager.config.discord.command_prefix
-        lines = ["**Available Commands**"]
-        for command in ctx.registry.commands():
-            lines.append(f"- `{prefix}{command.name}` — {command.description}")
+        
+        lines = ["# 📜 Available Commands"]
+        for cmd in ctx.registry.commands():
+            cmd_name = f"{prefix}{cmd.name}"
+            desc = cmd.description
+            lines.append(f"- `{cmd_name}` : {desc}")
+            
         await ctx.respond("\n".join(lines))
 
-    @command("setting", description="Show the current configuration snapshot.")
+    @command("setting", description="View or modify configuration.")
     async def setting(self, ctx: CommandContext) -> None:
-        config_dict = ctx.config_manager.as_dict()
-        payload = json.dumps(config_dict, indent=2, default=str)
-        message = await ctx.respond(f"```json\n{payload}\n```")
-        await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
+        if not ctx.args:
+            config_dict = ctx.config_manager.as_dict()
+            payload = json.dumps(config_dict, indent=2, default=str)
+            message = await ctx.respond(f"```json\n{payload}\n```")
+            await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
+            return
+
+        # Handle configuration updates
+        key = ctx.args[0].lower()
+        
+        if key in ("selfcmds", "allow_self_commands", "self_commands"):
+            # Toggle if no value provided, else set value
+            if len(ctx.args) < 2:
+                current = ctx.config_manager.config.discord.allow_self_commands
+                new_value = not current
+            else:
+                val_str = ctx.args[1].lower()
+                new_value = val_str in ("true", "1", "on", "yes", "enable", "enabled")
+            
+            # Apply and save
+            ctx.config_manager.config.discord.allow_self_commands = new_value
+            try:
+                ctx.config_manager.save()
+                status = "Enabled" if new_value else "Disabled"
+                await ctx.respond(f"✅ Self-bot commands **{status}**. Configuration saved.")
+            except Exception as e:
+                await ctx.respond(f"❌ Failed to save configuration: {e}")
+            return
+
+        await ctx.respond(f"❌ Unknown setting key: `{key}`. Currently supported: `selfcmds`")
 
     @command("log", description="Show recent log entries.")
     async def log(self, ctx: CommandContext) -> None:
@@ -74,3 +106,47 @@ class GeneralCog(Cog):
             snippet = snippet[-1800:]
         message = await ctx.respond(f"```text\n{snippet}\n```")
         await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
+
+    @command("clear", description="Clear messages from channel.")
+    async def clear(self, ctx: CommandContext) -> None:
+        if not ctx.args:
+            await ctx.respond("Usage: `clear <amount> [-f] [@user]`")
+            return
+            
+        amount = 0
+        target_id: int | None = None
+        is_self = False
+        
+        args = list(ctx.args)
+        
+        # Parse -f flag
+        if "-f" in args:
+            is_self = True
+            args.remove("-f")
+
+        # Parse valid args
+        for arg in args:
+            if arg.isdigit():
+                amount = int(arg)
+            elif arg.startswith("<@") and arg.endswith(">"):
+                # Parse mention
+                try:
+                    target_id = int(arg[2:-1].replace("!", ""))
+                except ValueError:
+                    pass
+        
+        if is_self:
+            if ctx.bot.user:
+                target_id = ctx.bot.user.id
+            
+        if amount <= 0:
+             await ctx.respond("Invalid amount.")
+             return
+             
+        deleted = await MessageCleaner.cleanup_channel(
+            ctx.message.channel, 
+            amount, 
+            target_ids=target_id
+        )
+            
+        await ctx.respond(f"🧹 Cleared {deleted} messages.", delete_after=3.0)
