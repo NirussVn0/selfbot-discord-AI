@@ -7,6 +7,6 @@
   "highest_win": 0,
   "highest_loss_streak": 0,
   "current_loss_streak": 0,
-  "session_start": "2026-01-10T00:04:43.007129",
-  "session_end": "2026-01-10T00:06:00.920188"
+  "session_start": null,
+  "session_end": null
 }

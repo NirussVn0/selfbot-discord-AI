@@ -1,6 +1,8 @@
 from selfbot_discord.services.owo.models import (
     BetResult,
+    BettingSide,
     MartingaleStrategy,
+    MultiplierMode,
     OWOBet,
     OWOGameState,
     OWOStats,
@@ -11,7 +13,9 @@ from selfbot_discord.services.owo.stats_tracker import OWOStatsTracker
 
 __all__ = [
     "BetResult",
+    "BettingSide",
     "MartingaleStrategy",
+    "MultiplierMode",
     "OWOBet",
     "OWOGameState",
     "OWOStats",

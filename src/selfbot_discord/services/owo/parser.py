@@ -22,7 +22,13 @@ class ParseResult:
 class OWOMessageParser:
     OWO_BOT_ID = 408785106942164992
 
-    WIN_PATTERN = re.compile(r"you won.*?(\d[\d,]*)", re.IGNORECASE)
+    # Anchor to 'cowoncy' or emoji to avoid matching User IDs. 
+    # Supports "won 500 cowoncy" AND "won :cowoncy: 500"
+    # Handling full emoji ID: <a?:name:id>
+    WIN_PATTERN = re.compile(
+        r"won.*?(?:(\d[\d,]+)\s*(?:<a?:cowoncy\S*>|cowoncy|oo)|(?:<a?:cowoncy\S*>|cowoncy|oo)\s*[\*_]*\s*(\d[\d,]+))", 
+        re.IGNORECASE | re.DOTALL
+    )
     LOSS_PATTERN = re.compile(r"lost it all", re.IGNORECASE)
     COOLDOWN_PATTERN = re.compile(r"slow down|cooldown|wait|please wait", re.IGNORECASE)
     BALANCE_PATTERN = re.compile(r"you currently have\s*([\d,]+)", re.IGNORECASE)
@@ -55,15 +61,19 @@ class OWOMessageParser:
 
         win_match = cls.WIN_PATTERN.search(content)
         if win_match:
-            amount_str = win_match.group(1).replace(",", "")
+            # Group 1 (Amount first) OR Group 2 (Currency first)
+            amount_str = (win_match.group(1) or win_match.group(2)).replace(",", "")
             try:
                 amount = int(amount_str)
-                return ParseResult(
-                    is_owo_response=True,
-                    is_win=True,
-                    won_amount=amount,
-                    confidence=1.0,
-                )
+                # Safety check: OWO wins shouldn't exceed reasonable limits (e.g., >1 trillion)
+                # This prevents matching Snowflake IDs (~18 digits)
+                if amount < 1_000_000_000_000:
+                    return ParseResult(
+                        is_owo_response=True,
+                        is_win=True,
+                        won_amount=amount,
+                        confidence=1.0,
+                    )
             except ValueError:
                 pass
 

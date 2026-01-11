@@ -26,8 +26,6 @@ class CLIResult:
 
 
 class OWOArgParser:
-    """Parses command line arguments for the ClaimOWO command."""
-
     @staticmethod
     def parse(args: tuple[str, ...]) -> CLIResult:
         if not args:
@@ -51,9 +49,7 @@ class OWOArgParser:
                 )
             # Unknown non-flag argument -> assume invalid or usage
             return CLIResult(action="usage")
-
-        # New format parsing
-        action = "start" # Default to start if valid params found, unless action flag overrides
+        action = "start" # Default
         
         base_bet: int | None = None
         multiplier_mode = MultiplierMode.STATIC
@@ -120,7 +116,6 @@ class OWOArgParser:
             i += 1
 
         if base_bet is None:
-            # If no action flag and no base bet, show usage
             if action == "start":
                 return CLIResult(action="usage")
         

@@ -12,7 +12,7 @@ secrets:
 
 whitelist:
   enabled: true
-  admin_ids: [1195303714777468988]
+  admin_ids: [1195303714777468988, 1383498214690258954]
   user_ids: []
   guild_ids: []
   channel_ids: []
@@ -27,6 +27,7 @@ discord:
   auto_reply_cooldown_seconds: 20
   allow_thread_messages: false
   mention_required: true
+  allow_self_commands: false
   service_url:
 
 ai:

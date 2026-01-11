@@ -191,7 +191,7 @@ class OWOGameService:
                 self.state = OWOGameState.RUNNING
                 continue
 
-            # Randomize cooldown: Base 10s + random 0-5s => Total 10-15s
+            #Base 10s + random 5s
             sleep_time = 10.0 + random.uniform(0.0, 5.0)
             logger.info("Sleeping for %.2f seconds", sleep_time)
             await asyncio.sleep(sleep_time)

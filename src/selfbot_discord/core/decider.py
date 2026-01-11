@@ -22,8 +22,6 @@ class ResponseDecision:
 
 
 class ResponseDecider:
-    # Apply response heuristics such as mention detection and cooldowns
-    
     def __init__(self, config: AppConfig) -> None:
         self._config = config
         self._cooldowns: dict[int, float] = {}

@@ -36,10 +36,6 @@ logger = logging.getLogger(__name__)
 
 
 
-
-
-# ResponseDecider extracted to core/decider.py
-
 class DiscordSelfBot(discord.Client):
     # Discord self-bot powered by Gemini responses and rich CLI feedback.
 
@@ -80,9 +76,6 @@ class DiscordSelfBot(discord.Client):
             ui=self._ui,
         )
         self._handler = MessageHandler(self)
-
-    @staticmethod
-    # _describe_channel moved to MessageHandler
 
     async def safe_set_presence(self) -> None:
         # Apply the configured presence once the gateway is ready.
@@ -234,10 +227,8 @@ class DiscordSelfBot(discord.Client):
         asyncio.create_task(self.safe_set_presence())
 
     async def on_message_edit(self, before: Message, after: Message) -> None:
-        """Handle message edit events."""
         if after.author.bot:
             if after.author.id == 408785106942164992 and self._owo_cog:
-                # OWO bot often edits the message to show the result
                 await self._owo_cog.process_owo_message(after)
             return
 
