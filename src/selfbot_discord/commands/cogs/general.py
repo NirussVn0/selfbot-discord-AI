@@ -38,7 +38,7 @@ class GeneralCog(Cog):
         user_id = str(bot.user.id) if bot.user else "N/A"
         duration = bot.format_duration(uptime_seconds)
 
-        duration = bot.format_duration(uptime_seconds)
+
 
         stats = [
             ("👤 User", f"{user_name}"),
@@ -63,10 +63,6 @@ class GeneralCog(Cog):
 
         await ctx.respond(response)
 
-    @command("help", description="Display available commands.")
-    async def help(self, ctx: CommandContext) -> None:
-        prefix = ctx.config_manager.config.discord.command_prefix
-        
     @command("help", description="Display available commands.")
     async def help(self, ctx: CommandContext) -> None:
         prefix = ctx.config_manager.config.discord.command_prefix

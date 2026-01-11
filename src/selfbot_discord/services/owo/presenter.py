@@ -27,23 +27,23 @@ class OWOStatsPresenter:
         win_rate = f"{stats.win_rate:.1f}%"
         profit = f"{stats.net_profit:+,}"
 
-    lines = []
-    lines.append(TextStyler.stat_line([("🟢 Status", status), ("⏱️ Duration", session_duration)]))
-    lines.append("")
-    lines.append(TextStyler.key_value("💰 Net Profit", profit))
-    lines.append(TextStyler.stat_line([("📈 Win Rate", win_rate), ("🎲 Games", stats.total_games)]))
-    lines.append(TextStyler.stat_line([("✅ Wins", stats.total_wins), ("❌ Losses", stats.total_losses)]))
-    lines.append("")
-    lines.append(TextStyler.key_value("🏆 Highest Win", f"{stats.highest_win:,}"))
-    lines.append(TextStyler.key_value("🔥 Loss Streak", f"{stats.current_loss_streak} (Max: {stats.highest_loss_streak})"))
-    
-    if strategy:
-         lines.append("")
-         lines.append(f"**Next Bet**: `{current_bet}`")
+        lines = []
+        lines.append(TextStyler.stat_line([("🟢 Status", status), ("⏱️ Duration", session_duration)]))
+        lines.append("")
+        lines.append(TextStyler.key_value("💰 Net Profit", profit))
+        lines.append(TextStyler.stat_line([("📈 Win Rate", win_rate), ("🎲 Games", stats.total_games)]))
+        lines.append(TextStyler.stat_line([("✅ Wins", stats.total_wins), ("❌ Losses", stats.total_losses)]))
+        lines.append("")
+        lines.append(TextStyler.key_value("🏆 Highest Win", f"{stats.highest_win:,}"))
+        lines.append(TextStyler.key_value("🔥 Loss Streak", f"{stats.current_loss_streak} (Max: {stats.highest_loss_streak})"))
+        
+        if strategy:
+            lines.append("")
+            lines.append(f"**Next Bet**: `{current_bet}`")
 
-    return TextStyler.make_embed(
-        title="ClaimOWO Session",
-        content="\n".join(lines),
-        emoji="📊",
-        footer="Hikari OWO Automaton"
-    )
+        return TextStyler.make_embed(
+            title="ClaimOWO Session",
+            content="\n".join(lines),
+            emoji="📊",
+            footer="Hikari OWO Automaton"
+        )
