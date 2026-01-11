@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from selfbot_discord.commands.base import Cog, CommandContext, CommandError, command
-from selfbot_discord.services.owo import OWOGameService, OWOStatsTracker
+from selfbot_discord.services.owo import OWOGameService, OWOStatsTracker, MultiplierMode, BettingSide
+from selfbot_discord.services.owo.presenter import OWOStatsPresenter
+from selfbot_discord.services.owo.cli import OWOArgParser, OWOUsageError
+from selfbot_discord.services.cleanup import MessageCleaner
 
 if TYPE_CHECKING:
     from discord import Message
@@ -19,66 +23,108 @@ class ClaimOWOCog(Cog):
         self.game_service = game_service
         self.stats_tracker = stats_tracker
         self._game_task: asyncio.Task | None = None
-        self._message_handler_active = False
 
     @command("claimowo", description="Manage OWO coin flip automation", aliases=["cowo"])
     async def claimowo(self, ctx: CommandContext) -> None:
-        if not ctx.args:
-            await ctx.respond(
-                "**ClaimOWO Usage:**\n"
-                f"• `{ctx.bot._config.discord.command_prefix}claimowo <amount>` - Start betting with base amount\n"
-                f"• `{ctx.bot._config.discord.command_prefix}claimowo stop` - Stop current session\n"
-                f"• `{ctx.bot._config.discord.command_prefix}claimowo info` - View statistics"
-            )
+        try:
+            result = OWOArgParser.parse(ctx.args)
+        except OWOUsageError as e:
+            await ctx.respond(f"❌ {e}")
+            await self._show_usage(ctx)
             return
 
-        subcommand = ctx.args[0].lower()
+        if result.action == "usage":
+            await self._show_usage(ctx)
+            return
 
-        if subcommand == "stop":
+        if result.action == "stop":
             await self._handle_stop(ctx)
-        elif subcommand == "info":
-            await self._handle_info(ctx)
-        else:
-            try:
-                amount = int(subcommand)
-                await self._handle_start(ctx, amount)
-            except ValueError:
-                raise CommandError(f"Invalid amount: `{subcommand}`. Use a number, 'stop', or 'info'.")
+            return
 
-    async def _handle_start(self, ctx: CommandContext, amount: int) -> None:
+        if result.action == "info":
+            await self._handle_info(ctx)
+            return
+
+        if result.action == "reset":
+            await self._handle_reset(ctx)
+            return
+
+        if result.action == "clear":
+            await self._handle_cleanup(ctx)
+            return
+
+        if result.action == "start" and result.start_params:
+            await self._handle_start(
+                ctx, 
+                result.start_params.amount,
+                result.start_params.multiplier_mode,
+                result.start_params.static_multiplier,
+                result.start_params.betting_side
+            )
+
+    async def _show_usage(self, ctx: CommandContext) -> None:
+        p = ctx.bot._config.discord.command_prefix
+        await ctx.respond(
+            f"# 🛠️ ClaimOWO Usage\n"
+            f"**Start**: `{p}claimowo -b <bet> [flags]`\n"
+            f"**Stop**: `{p}claimowo -s`\n"
+            f"**Info**: `{p}claimowo -i`\n"
+            f"**Reset**: `{p}claimowo -reset`\n\n"
+            f"### Flags\n"
+            f"`-b <amt>` : Base bet amount\n"
+            f"`-e <data> ` : Multiplier (`auto`, `x2`, `x3`)\n"
+            f"`-side <h/t/r>` : Side (`heads`, `tails`, `random`)\n"
+            f"`-clear` : Cleanup game messages"
+        )
+
+    async def _handle_start(
+        self,
+        ctx: CommandContext,
+        amount: int,
+        multiplier_mode: MultiplierMode = MultiplierMode.STATIC,
+        static_multiplier: float = 3.0,
+        betting_side: BettingSide = BettingSide.RANDOM
+    ) -> None:
         if amount <= 0:
             raise CommandError("Bet amount must be greater than 0.")
 
-        if self.game_service.state.name == "RUNNING":
-            raise CommandError("A game is already running. Use `stop` to end it first.")
+        if self._game_task and not self._game_task.done():
+            raise CommandError("A game is already running. Use `-s` to stop it first.")
 
-        self.game_service.start_game(ctx.message.channel, amount)
+        self.game_service.start_game(
+            ctx.message.channel,
+            amount,
+            multiplier_mode=multiplier_mode,
+            static_multiplier=static_multiplier,
+            betting_side=betting_side
+        )
+        
+        mode_str = "Auto" if multiplier_mode == MultiplierMode.AUTO else f"Static {static_multiplier}x"
+        side_str = betting_side.name.title()
+        fmt_amount = f"{amount:,}"
 
         response = await ctx.respond(
-            f"🎰 **ClaimOWO Started!**\n"
-            f"• Base Bet: `{amount}` cowoncy\n"
-            f"• Multiplier: `3x` on loss\n"
-            f"• Status: `Running`\n\n"
-            f"Use `{ctx.bot._config.discord.command_prefix}claimowo stop` to stop."
+            f"# 🎰 ClaimOWO Started\n"
+            f"> **Strategy**: `{mode_str}`\n"
+            f"> **Side**: `{side_str}`\n"
+            f"> **Base Bet**: `{fmt_amount}` cowoncy\n"
+            f"> **Status**: `Running`\n\n"
+            f"Use `{ctx.bot._config.discord.command_prefix}claimowo -s` to stop."
         )
         await ctx.bot.schedule_ephemeral_cleanup(ctx.message, response, delay=10.0)
-
-        if not self._message_handler_active:
-            self._message_handler_active = True
-            self.bot.add_listener(self._on_message_for_game, "on_message")
 
         self._game_task = asyncio.create_task(self.game_service.run_game_loop())
 
         if ctx.ui:
             ctx.ui.notify_event(
-                f"ClaimOWO started with base bet {amount} cowoncy",
+                f"ClaimOWO started: {amount} ({mode_str}, {side_str})",
                 icon="🎰",
                 style="green",
                 force=True,
             )
 
     async def _handle_stop(self, ctx: CommandContext) -> None:
-        if self.game_service.state.name != "RUNNING":
+        if not self._game_task or self._game_task.done():
             raise CommandError("No game is currently running.")
 
         self.game_service.stop_game()
@@ -90,16 +136,15 @@ class ClaimOWOCog(Cog):
             except asyncio.CancelledError:
                 pass
 
-        if self._message_handler_active:
-            self.bot.remove_listener(self._on_message_for_game, "on_message")
-            self._message_handler_active = False
-
         stats = self.stats_tracker.get_stats()
+        
+        profit = f"{stats.net_profit:+,}"
+        
         response = await ctx.respond(
-            f"🛑 **ClaimOWO Stopped**\n"
-            f"• Games Played: `{stats.total_games}`\n"
-            f"• Wins: `{stats.total_wins}` | Losses: `{stats.total_losses}`\n"
-            f"• Net Profit: `{stats.net_profit:+,}` cowoncy"
+            f"# 🛑 Session Stopped\n"
+            f"**Games Played**: `{stats.total_games}`\n"
+            f"**Win/Loss**: `{stats.total_wins}` / `{stats.total_losses}`\n"
+            f"**Net Profit**: `{profit}` cowoncy"
         )
         await ctx.bot.schedule_ephemeral_cleanup(ctx.message, response, delay=10.0)
 
@@ -113,45 +158,38 @@ class ClaimOWOCog(Cog):
 
     async def _handle_info(self, ctx: CommandContext) -> None:
         stats = self.stats_tracker.get_stats()
-
-        if stats.total_games == 0:
-            response = await ctx.respond("📊 No games played yet. Start with `claimowo <amount>`.")
-            await ctx.bot.schedule_ephemeral_cleanup(ctx.message, response, delay=5.0)
-            return
-
-        info_text = self._format_stats(stats)
+        info_text = OWOStatsPresenter.format_stats(
+            stats, 
+            self.game_service.strategy, 
+            self.game_service.state
+        )
         response = await ctx.respond(info_text)
         await ctx.bot.schedule_ephemeral_cleanup(ctx.message, response, delay=15.0)
 
-    def _format_stats(self, stats) -> str:
-        session_duration = "N/A"
-        if stats.session_start and stats.session_end:
-            duration = stats.session_end - stats.session_start
-            session_duration = str(duration).split(".")[0]
+    async def _handle_reset(self, ctx: CommandContext) -> None:
+        self.stats_tracker.reset_stats()
+        response = await ctx.respond("✅ **Statistics have been reset.**")
+        await ctx.bot.schedule_ephemeral_cleanup(ctx.message, response, delay=5.0)
 
-        return (
-            "📊 **ClaimOWO Statistics**\n\n"
-            f"**Session Info**\n"
-            f"• Games Played: `{stats.total_games}`\n"
-            f"• Session Duration: `{session_duration}`\n\n"
-            f"**Win/Loss Ratio**\n"
-            f"• Wins: `{stats.total_wins}` ({stats.win_rate:.1f}%)\n"
-            f"• Losses: `{stats.total_losses}` ({stats.loss_rate:.1f}%)\n"
-            f"• Current Loss Streak: `{stats.current_loss_streak}`\n"
-            f"• Highest Loss Streak: `{stats.highest_loss_streak}`\n\n"
-            f"**Financial Summary**\n"
-            f"• Total Won: `{stats.total_money_won:,}` cowoncy\n"
-            f"• Total Lost: `{stats.total_money_lost:,}` cowoncy\n"
-            f"• Net Profit: `{stats.net_profit:+,}` cowoncy\n"
-            f"• Highest Win: `{stats.highest_win:,}` cowoncy"
-        )
+    async def _handle_cleanup(self, ctx: CommandContext) -> None:
+        """Clear recent messages from self and OWO bot."""
+        targets = [ctx.bot.user.id, 408785106942164992]
+        deleted = await MessageCleaner.cleanup_channel(ctx.message.channel, 50, target_ids=targets)
+        await ctx.respond(f"🧹 Cleared {deleted} messages.", delete_after=3.0)
 
-    async def _on_message_for_game(self, message: Message) -> None:
+
+
+
+    async def process_owo_message(self, message: Message) -> None:
         if message.author.id != 408785106942164992:
+            return
+
+        if self.game_service.channel is None:
             return
 
         if message.channel.id != self.game_service.channel.id:
             return
 
+        logger.info("Received OWO message: %r", message.content)
         await self.game_service.process_result(message)
         await self.game_service.update_balance(message)

@@ -46,6 +46,7 @@ class DiscordConfig(BaseModel):
     allow_thread_messages: bool = Field(default=True, description="Whether to respond within threads.")
     mention_required: bool = Field(default=True, description="Require an explicit mention before replying.")
     service_url: HttpUrl | None = Field(default=None, description="Optional webhook or metrics endpoint.")
+    allow_self_commands: bool = Field(default=False, description="Allow the self-bot to execute its own commands.")
 
     @field_validator("auto_reply_probability")
     @classmethod

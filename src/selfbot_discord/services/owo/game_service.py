@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from typing import TYPE_CHECKING
 
 from selfbot_discord.services.owo.models import (
     BetResult,
+    BettingSide,
     MartingaleStrategy,
+    MultiplierMode,
     OWOBet,
     OWOGameState,
 )
@@ -38,18 +41,38 @@ class OWOGameService:
         self.current_balance: int = 0
         self._pending_bet: OWOBet | None = None
         self._stop_requested = False
+        self._result_received = asyncio.Event()
 
-    def start_game(self, channel: discord.TextChannel, initial_bet: int) -> None:
+    def start_game(
+        self,
+        channel: discord.TextChannel,
+        initial_bet: int,
+        multiplier_mode: MultiplierMode = MultiplierMode.STATIC,
+        static_multiplier: float = 3.0,
+        betting_side: BettingSide = BettingSide.RANDOM,
+    ) -> None:
         if self.state == OWOGameState.RUNNING:
             msg = "Game is already running"
             raise RuntimeError(msg)
 
         self.channel = channel
-        self.strategy = MartingaleStrategy(base_bet=initial_bet, current_bet=initial_bet)
+        self.strategy = MartingaleStrategy(
+            base_bet=initial_bet,
+            current_bet=initial_bet,
+            multiplier_mode=multiplier_mode,
+            static_multiplier=static_multiplier,
+            betting_side=betting_side,
+        )
         self.state = OWOGameState.RUNNING
         self._stop_requested = False
         self.stats_tracker.start_session()
-        logger.info("Started OWO game with base bet %d in channel %s", initial_bet, channel.id)
+        logger.info(
+            "Started OWO game [bet=%d, mode=%s, mult=%.1f] in channel %s",
+            initial_bet,
+            multiplier_mode.name,
+            static_multiplier,
+            channel.id
+        )
 
     def stop_game(self) -> None:
         self._stop_requested = True
@@ -72,11 +95,17 @@ class OWOGameService:
             return False
 
         self._pending_bet = OWOBet(amount=bet_amount, result=BetResult.PENDING)
+        
+        # Determine side based on strategy
+        side = self.strategy.get_next_side()
 
         for attempt in range(self.max_retries):
             try:
-                await self.channel.send(f"owocf {bet_amount}")
-                logger.info("Placed bet of %d (attempt %d/%d)", bet_amount, attempt + 1, self.max_retries)
+                # Add a small random delay before typing (0.5 - 1.5s) to simulate human
+                await asyncio.sleep(random.uniform(0.5, 1.5))
+                
+                await self.channel.send(f"owocf {bet_amount} {side}")
+                logger.info("Placed bet of %d on %s (attempt %d/%d)", bet_amount, side, attempt + 1, self.max_retries)
                 self.state = OWOGameState.COOLDOWN
                 return True
             except Exception as exc:
@@ -99,8 +128,9 @@ class OWOGameService:
 
         if parse_result.is_cooldown:
             logger.info("Cooldown detected, will retry after delay")
-            await asyncio.sleep(self.retry_delay_seconds)
-            self.state = OWOGameState.RUNNING
+            # Wait a bit longer than the requested cooldown to be safe
+            await asyncio.sleep(self.retry_delay_seconds + 1.0)
+            self._result_received.set()
             return False
 
         if parse_result.is_win:
@@ -111,15 +141,17 @@ class OWOGameService:
             logger.info("Won %d cowoncy! Resetting to base bet.", parse_result.won_amount)
             self._pending_bet = None
             self.state = OWOGameState.RUNNING
+            self._result_received.set()
             return True
 
         if parse_result.is_loss:
             self._pending_bet.result = BetResult.LOSS
             self.stats_tracker.record_bet(self._pending_bet)
             self.strategy.on_loss()
-            logger.info("Lost bet. Next bet will be %d (x3 multiplier)", self.strategy.current_bet)
+            logger.info("Lost bet. Next bet will be %d", self.strategy.current_bet)
             self._pending_bet = None
             self.state = OWOGameState.RUNNING
+            self._result_received.set()
             return True
 
         return False
@@ -137,10 +169,31 @@ class OWOGameService:
         await self.channel.send("owocash")
         await asyncio.sleep(2)
 
-        while self.state == OWOGameState.RUNNING and not self._stop_requested:
+        while (not self._stop_requested) and (self.state == OWOGameState.RUNNING or self.state == OWOGameState.COOLDOWN):
+            bet_amount = self.strategy.current_bet if self.strategy else 0
+            
+            if bet_amount > self.current_balance and self.current_balance > 0:
+                logger.warning("Insufficient balance (%d) for bet (%d). Stopping game.", self.current_balance, bet_amount)
+                self.stop_game()
+                break
+
+            self._result_received.clear()
+            self.state = OWOGameState.RUNNING  # Ensure we are in running state before placing bet
+            
             if not await self.place_bet():
                 break
 
-            await asyncio.sleep(self.cooldown_seconds)
+            try:
+                await asyncio.wait_for(self._result_received.wait(), timeout=15.0)
+            except asyncio.TimeoutError:
+                logger.warning("Timeout waiting for OWO response, retrying...")
+                self._pending_bet = None
+                self.state = OWOGameState.RUNNING
+                continue
+
+            #Base 10s + random 5s
+            sleep_time = 10.0 + random.uniform(0.0, 5.0)
+            logger.info("Sleeping for %.2f seconds", sleep_time)
+            await asyncio.sleep(sleep_time)
 
         logger.info("Game loop ended")
