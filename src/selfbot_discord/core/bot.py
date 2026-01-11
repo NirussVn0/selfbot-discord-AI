@@ -26,6 +26,7 @@ from selfbot_discord.services.owo import OWOGameService, OWOStatsTracker
 from selfbot_discord.services.whitelist import WhitelistService
 from selfbot_discord.ui import ConsoleUI
 from selfbot_discord.core.decider import ResponseDecider
+from selfbot_discord.core.handlers import MessageHandler
 
 if TYPE_CHECKING:
     from discord import Message
@@ -78,20 +79,10 @@ class DiscordSelfBot(discord.Client):
             on_reload=self.apply_configuration,
             ui=self._ui,
         )
+        self._handler = MessageHandler(self)
 
     @staticmethod
-    def _describe_channel(message: "Message") -> str:
-        if message.guild is None:
-            return "Direct Message"
-        channel = message.channel
-        if isinstance(channel, discord.Thread):
-            parent = getattr(channel, "parent", None)
-            parent_name = getattr(parent, "name", "thread")
-            return f"{message.guild.name}#{parent_name}/{channel.name}"
-        channel_name = getattr(channel, "name", None)
-        if channel_name:
-            return f"{message.guild.name}#{channel_name}"
-        return message.guild.name
+    # _describe_channel moved to MessageHandler
 
     async def safe_set_presence(self) -> None:
         # Apply the configured presence once the gateway is ready.
@@ -170,157 +161,9 @@ class DiscordSelfBot(discord.Client):
         asyncio.create_task(self.safe_set_presence())
 
     async def on_message(self, message: Message) -> None:  # noqa: D401 - discord signature
-        if self.user is None:
-            logger.debug("Client user not yet ready; skipping message processing.")
-            return
-        if message.author.id == self.user.id:
-            self._conversation_store.append(message.channel.id, "me", message.content)
-            if self._config.discord.allow_self_commands:
-                if await self._handle_command(message):
-                    return
-            return
-        if message.author.bot:
-            if message.author.id == 408785106942164992 and self._owo_cog:
-                await self._owo_cog.process_owo_message(message)
-            return
+        await self._handler.handle_message(message)
 
-        author_display = message.author.display_name or message.author.name
-        author_markup = escape(author_display)
-        channel_label = escape(self._describe_channel(message))
-
-        if self._ui:
-            self._ui.increment_messages()
-            self._ui.notify_event(
-                f"Message from [bold]{author_markup}[/] in [italic]{channel_label}[/]",
-                icon="✉️",
-                style="cyan",
-            )
-
-        whitelist_result = self._whitelist.evaluate(message)
-        if not whitelist_result.allow:
-            logger.debug(
-                "Whitelist rejected message %s in channel %s: %s",
-                message.id,
-                message.channel.id,
-                whitelist_result.reason,
-            )
-            if self._ui:
-                reason = escape(whitelist_result.reason or "blocked")
-                self._ui.notify_event(
-                    f"Blocked message from [bold]{author_markup}[/] — {reason}.",
-                    icon="🔒",
-                    style="yellow",
-                )
-            return
-
-        if await self._handle_command(message):
-            return
-
-        decision = self._decider.decide(message, self.user)
-        if not decision.should_reply:
-            logger.debug(
-                "Skipping reply for message %s: %s",
-                message.id,
-                decision.reason,
-            )
-            self._conversation_store.append(message.channel.id, author_display, message.content)
-            if self._ui:
-                reason = escape(decision.reason or "no trigger")
-                self._ui.notify_event(
-                    f"Ignored message from [bold]{author_markup}[/] — {reason}.",
-                    icon="💤",
-                    style="grey50",
-                )
-            return
-
-        try:
-            reply = await self._generate_reply(message)
-        except Exception as exc:  # pragma: no cover - runtime API failures
-            logger.exception("Failed to produce reply: %s", exc)
-            if self._ui:
-                self._ui.notify_event(
-                    f"Failed to produce reply for [bold]{author_markup}[/].",
-                    icon="⚠",
-                    style="red",
-                    force=True,
-                )
-            fallback = "Sorry, the AI service is unavailable right now."
-            await message.channel.send(fallback)
-            self._decider.register_reply(message.channel.id)
-            self._conversation_store.append(message.channel.id, "bot", fallback)
-            if self._ui:
-                self._ui.increment_replies()
-                self._ui.notify_event(
-                    f"Sent fallback reply to [bold]{author_markup}[/].",
-                    icon="🛟",
-                    style="yellow",
-                    force=True,
-                )
-            return
-
-        if not reply.strip():
-            logger.debug("AI returned empty reply for message %s.", message.id)
-            if self._ui:
-                self._ui.notify_event(
-                    f"AI returned an empty reply for [bold]{author_markup}[/].",
-                    icon="⚠",
-                    style="yellow",
-                    force=True,
-                )
-            fallback = self._config.ai.empty_reply_fallback or ""
-            fallback = fallback.strip()
-            if fallback:
-                await message.channel.send(fallback)
-                self._decider.register_reply(message.channel.id)
-                self._conversation_store.append(message.channel.id, "bot", fallback)
-                if self._ui:
-                    self._ui.increment_replies()
-                    self._ui.notify_event(
-                        f"Sent fallback reply to [bold]{author_markup}[/].",
-                        icon="🛟",
-                        style="yellow",
-                        force=True,
-                    )
-            else:
-                logger.debug("Skipping fallback reply; no fallback message configured.")
-                if self._ui:
-                    self._ui.notify_event(
-                        f"Skipped fallback reply to [bold]{author_markup}[/].",
-                        icon="🛟",
-                        style="grey50",
-                        force=True,
-                    )
-            return
-
-        await message.channel.send(reply)
-        self._decider.register_reply(message.channel.id)
-        self._conversation_store.append(message.channel.id, "bot", reply)
-        if self._ui:
-            self._ui.increment_replies()
-            self._ui.notify_event(
-                f"Responded to [bold]{author_markup}[/] in [italic]{channel_label}[/]",
-                icon="🤖",
-                style="green",
-                force=True,
-            )
-
-    async def _generate_reply(self, message: Message) -> str:
-        author_name = message.author.display_name or message.author.name
-        conversation = self._conversation_store.snapshot(message.channel.id)
-        self._conversation_store.append(message.channel.id, author_name, message.content)
-        if self._ui:
-            style = self._ui.STATUS_STYLES.get("BUSY", "magenta")
-            with self._ui.activity("BUSY", style=style):
-                return await self._ai_service.generate_reply(
-                    author_name=author_name,
-                    message_content=message.content,
-                    conversation=conversation,
-                )
-        return await self._ai_service.generate_reply(
-            author_name=author_name,
-            message_content=message.content,
-            conversation=conversation,
-        )
+    # _generate_reply moved to MessageHandler
 
     async def close(self) -> None:
         logger.info("Shutting down self-bot.")
