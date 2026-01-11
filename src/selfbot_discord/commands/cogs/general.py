@@ -11,6 +11,7 @@ import json
 from selfbot_discord.commands.base import Cog, CommandContext, CommandError, command
 from selfbot_discord.services.cleanup import MessageCleaner
 from selfbot_discord.services.diagnostics import DiagnosticsService
+from selfbot_discord.utils.formatting import TextStyler
 from selfbot_discord.services.diagnostics import DiagnosticsService
 
 
@@ -18,7 +19,12 @@ class GeneralCog(Cog):
     @command("ping", description="Check if the self-bot is responsive.")
     async def ping(self, ctx: CommandContext) -> None:
         latency_ms = getattr(ctx.bot, "latency", 0.0) * 1000
-        await ctx.respond(f"Pong! 🏓 `{latency_ms:.0f} ms`")
+        message = TextStyler.make_embed(
+            title="System Latency",
+            content=TextStyler.key_value("Gateway", f"{latency_ms:.0f}ms"),
+            emoji="🏓"
+        )
+        await ctx.respond(message)
 
     @command("status", description="Display runtime status and uptime information.")
     async def status(self, ctx: CommandContext) -> None:
@@ -32,25 +38,50 @@ class GeneralCog(Cog):
         user_id = str(bot.user.id) if bot.user else "N/A"
         duration = bot.format_duration(uptime_seconds)
 
-        await ctx.respond(
-            f"# 🤖 Hikari Status\n"
-            f"**User:** `{user_name}` (`{user_id}`)\n"
-            f"**Persona:** `{persona}`\n"
-            f"**Uptime:** `{duration}`\n"
-            f"**Latency:** `{latency_ms:.0f} ms` | **Servers:** `{guilds}`"
+
+
+        stats = [
+            ("👤 User", f"{user_name}"),
+            ("🆔 ID", f"{user_id}"),
+            ("🧠 Persona", persona),
+            ("⏱️ Uptime", duration),
+            ("📡 Latency", f"{latency_ms:.0f} ms"),
+            ("🌐 Servers", guilds)
+        ]
+        
+        # Breakdown into lines for cleaner look
+        content = ""
+        for k, v in stats:
+            content += f"{TextStyler.key_value(k, v)}\n"
+            
+        response = TextStyler.make_embed(
+            title="Hikari Status",
+            content=content.strip(),
+            emoji="🤖",
+            footer="System Operational"
         )
+
+        await ctx.respond(response)
 
     @command("help", description="Display available commands.")
     async def help(self, ctx: CommandContext) -> None:
         prefix = ctx.config_manager.config.discord.command_prefix
         
-        lines = ["# 📜 Available Commands"]
+        lines = []
         for cmd in ctx.registry.commands():
             cmd_name = f"{prefix}{cmd.name}"
             desc = cmd.description
-            lines.append(f"- `{cmd_name}` : {desc}")
+            lines.append(f"**{cmd_name}**\n{desc}\n")
             
-        await ctx.respond("\n".join(lines))
+        content = "\n".join(lines)
+        response = TextStyler.make_embed(
+            title="Available Commands",
+            content=content,
+            emoji="📜",
+            footer=f"Prefix: {prefix}"
+        )
+            
+        await ctx.respond(response)
 
     @command("setting", description="View or modify configuration.")
     async def setting(self, ctx: CommandContext) -> None:
