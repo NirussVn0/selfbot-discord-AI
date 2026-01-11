@@ -226,6 +226,9 @@ class DiscordSelfBot(discord.Client):
             return
         if message.author.id == self.user.id:
             self._conversation_store.append(message.channel.id, "me", message.content)
+            if self._config.discord.allow_self_commands:
+                if await self._handle_command(message):
+                    return
             return
         if message.author.bot:
             if message.author.id == 408785106942164992 and self._owo_cog:
@@ -432,6 +435,9 @@ class DiscordSelfBot(discord.Client):
         self._decider = ResponseDecider(config)
         if self._ui:
             self._ui.notify_event(
+                message="Configuration reloaded",
+                icon="🔄",
+                style="cyan"
             )
         asyncio.create_task(self.safe_set_presence())
 
