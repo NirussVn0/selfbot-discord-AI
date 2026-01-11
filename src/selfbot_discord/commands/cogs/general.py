@@ -10,6 +10,8 @@ import json
 
 from selfbot_discord.commands.base import Cog, CommandContext, CommandError, command
 from selfbot_discord.services.cleanup import MessageCleaner
+from selfbot_discord.services.diagnostics import DiagnosticsService
+from selfbot_discord.services.diagnostics import DiagnosticsService
 
 
 class GeneralCog(Cog):
@@ -87,25 +89,21 @@ class GeneralCog(Cog):
     async def log(self, ctx: CommandContext) -> None:
         logging_config = ctx.config_manager.config.logging
         log_dir = logging_config.log_dir or Path("logs")
-        log_dir_path = Path(log_dir)
-        log_file = log_dir_path / "selfbot.log"
-        if not log_file.exists():
-            message = await ctx.respond("No log file found.")
-            await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
-            return
-
-        lines = log_file.read_text(encoding="utf-8").splitlines()
-        recent = lines[-10:] if lines else []
-        if not recent:
-            message = await ctx.respond("Log file is empty.")
-            await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
-            return
-
-        snippet = "\n".join(recent)
-        if len(snippet) > 1800:
-            snippet = snippet[-1800:]
-        message = await ctx.respond(f"```text\n{snippet}\n```")
-        await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
+        
+        snippet = DiagnosticsService.get_recent_logs(log_dir)
+        
+        if snippet is None:
+             message = await ctx.respond("No log file found.")
+             await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
+             return
+             
+        if not snippet:
+             message = await ctx.respond("Log file is empty.")
+             await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=5.0)
+             return
+             
+        message = await ctx.respond(f"```log\n{snippet}\n```")
+        await ctx.bot.schedule_ephemeral_cleanup(ctx.message, message, delay=15.0)
 
     @command("clear", description="Clear messages from channel.")
     async def clear(self, ctx: CommandContext) -> None:
