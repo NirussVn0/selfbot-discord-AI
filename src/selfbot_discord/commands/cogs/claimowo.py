@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from selfbot_discord.commands.base import Cog, CommandContext, CommandError, command
 from selfbot_discord.services.owo import OWOGameService, OWOStatsTracker, MultiplierMode, BettingSide
 from selfbot_discord.services.owo.presenter import OWOStatsPresenter
+from selfbot_discord.services.owo.cli import OWOArgParser, OWOUsageError
 
 if TYPE_CHECKING:
     from discord import Message
@@ -24,106 +25,41 @@ class ClaimOWOCog(Cog):
 
     @command("claimowo", description="Manage OWO coin flip automation", aliases=["cowo"])
     async def claimowo(self, ctx: CommandContext) -> None:
-        if not ctx.args:
+        try:
+            result = OWOArgParser.parse(ctx.args)
+        except OWOUsageError as e:
+            await ctx.respond(f"❌ {e}")
             await self._show_usage(ctx)
             return
 
-        # Check for legacy commands (no flags) vs new format
-        args = ctx.args
-        is_new_format = any(arg.startswith("-") for arg in args)
-
-        if not is_new_format:
-            # Legacy basic format: [amount] or [subcommand]
-            subcommand = args[0].lower()
-            if subcommand in ("stop", "s"):
-                await self._handle_stop(ctx)
-            elif subcommand in ("info", "i"):
-                await self._handle_info(ctx)
-            else:
-                try:
-                    amount = int(subcommand)
-                    await self._handle_start(ctx, amount)
-                except ValueError:
-                    await self._show_usage(ctx)
+        if result.action == "usage":
+            await self._show_usage(ctx)
             return
 
-        # New format parsing
-        base_bet: int | None = None
-        multiplier_mode = MultiplierMode.STATIC
-        base_bet: int | None = None
-        multiplier_mode = MultiplierMode.STATIC
-        static_multiplier: float = 3.0
-        betting_side = BettingSide.RANDOM
-        
-        # Iteration for flags
-        i = 0
-        while i < len(args):
-            arg = args[i].lower()
-            
-            if arg in ("-s", "-stop", "stop"):
-                return await self._handle_stop(ctx)
-                
-            elif arg in ("-i", "-info", "info"):
-                return await self._handle_info(ctx)
-                
-            elif arg in ("-clear", "--clear"):
-                return await self._handle_cleanup(ctx)
+        if result.action == "stop":
+            await self._handle_stop(ctx)
+            return
 
-            elif arg in ("-reset", "--reset"):
-                return await self._handle_reset(ctx)
-                
-            elif arg in ("-b", "-bet"):
-                if i + 1 >= len(args):
-                    raise CommandError("Missing amount for `-b` flag.")
-                try:
-                    base_bet = int(args[i+1])
-                    i += 1
-                except ValueError:
-                    raise CommandError(f"Invalid bet amount: {args[i+1]}")
-                    
-            elif arg in ("-e", "-mode"):
-                if i + 1 >= len(args):
-                    raise CommandError("Missing value for `-e` flag.")
-                val = args[i+1].lower()
-                i += 1
-                
-                if val == "auto":
-                    multiplier_mode = MultiplierMode.AUTO
-                elif val.startswith("x") or val.replace(".", "", 1).isdigit():
-                    multiplier_mode = MultiplierMode.STATIC
-                    # Remove 'x' prefix if present
-                    mult_str = val[1:] if val.startswith("x") else val
-                    try:
-                        static_multiplier = float(mult_str)
-                    except ValueError:
-                        raise CommandError(f"Invalid multiplier: {val}")
-                else:
-                    raise CommandError(f"Invalid mode: {val}. Use 'auto', 'x2', 'x3', etc.")
+        if result.action == "info":
+            await self._handle_info(ctx)
+            return
 
-            elif arg in ("-side", "--side", "-sd"):
-                if i + 1 >= len(args):
-                    raise CommandError("Missing value for `-side` flag.")
-                val = args[i+1].lower()
-                i += 1
+        if result.action == "reset":
+            await self._handle_reset(ctx)
+            return
 
-                if val in ("h", "head", "heads"):
-                    betting_side = BettingSide.HEADS
-                elif val in ("t", "tail", "tails"):
-                    betting_side = BettingSide.TAILS
-                elif val in ("r", "rand", "random"):
-                     betting_side = BettingSide.RANDOM
-                else:
-                     raise CommandError(f"Invalid side: {val}. Use h, t, or r.")
-            else:
-                # Ignore unknown flags or positional args
-                pass
-            
-            i += 1
+        if result.action == "clear":
+            await self._handle_cleanup(ctx)
+            return
 
-        if base_bet is not None:
-            await self._handle_start(ctx, base_bet, multiplier_mode, static_multiplier, betting_side)
-        else:
-            await self._show_usage(ctx)
+        if result.action == "start" and result.start_params:
+            await self._handle_start(
+                ctx, 
+                result.start_params.amount,
+                result.start_params.multiplier_mode,
+                result.start_params.static_multiplier,
+                result.start_params.betting_side
+            )
 
     async def _show_usage(self, ctx: CommandContext) -> None:
         p = ctx.bot._config.discord.command_prefix
