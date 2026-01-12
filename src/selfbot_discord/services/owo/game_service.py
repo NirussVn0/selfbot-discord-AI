@@ -9,7 +9,7 @@ from selfbot_discord.services.owo.models import (
     BetResult,
     BettingSide,
     MartingaleStrategy,
-    MultiplierMode,
+    StrategyFlag,
     OWOBet,
     OWOGameState,
 )
@@ -48,7 +48,7 @@ class OWOGameService:
         self,
         channel: discord.TextChannel,
         initial_bet: int,
-        multiplier_mode: MultiplierMode = MultiplierMode.STATIC,
+        active_flags: set[StrategyFlag] | None = None,
         static_multiplier: float = 3.0,
         betting_side: BettingSide = BettingSide.RANDOM,
     ) -> None:
@@ -56,11 +56,14 @@ class OWOGameService:
             msg = "Game is already running"
             raise RuntimeError(msg)
 
+        if active_flags is None:
+            active_flags = set()
+
         self.channel = channel
         self.strategy = MartingaleStrategy(
             base_bet=initial_bet,
             current_bet=initial_bet,
-            multiplier_mode=multiplier_mode,
+            active_flags=active_flags,
             static_multiplier=static_multiplier,
             betting_side=betting_side,
         )
@@ -68,10 +71,13 @@ class OWOGameService:
         self._stop_requested = False
         self._cooldown_retry_needed = False
         self.stats_tracker.start_session()
+        
+        mode_str = ", ".join(f.name for f in active_flags) if active_flags else "STATIC"
+        
         logger.info(
             "Started OWO game [bet=%d, mode=%s, mult=%.1f] in channel %s",
             initial_bet,
-            multiplier_mode.name,
+            mode_str,
             static_multiplier,
             channel.id
         )
@@ -203,16 +209,19 @@ class OWOGameService:
                 continue
 
             # Sleep Logic:
-            # If Cooldown: Short random sleep (4-6s)
-            # If Normal: Long random sleep (10-15s)
-            
-            if self._cooldown_retry_needed:
-                sleep_time = random.uniform(4.0, 6.0)
-                logger.info("Cooldown retry wait: %.2fs", sleep_time)
-            else:
-                sleep_time = 10.0 + random.uniform(0.0, 5.0)
-                logger.info("Std round wait: %.2fs", sleep_time)
-                
-            await asyncio.sleep(sleep_time)
+            await self._wait_for_next_round()
 
         logger.info("Game loop ended")
+
+    async def _wait_for_next_round(self) -> None:
+        """Determines shuffle/sleep time based on context (cooldown vs normal)."""
+        if self._cooldown_retry_needed:
+            # Quick retry for rate limits
+            sleep_time = random.uniform(4.0, 6.0)
+            logger.info("Cooldown retry wait: %.2fs", sleep_time)
+        else:
+            # Standard human-like delay
+            sleep_time = 10.0 + random.uniform(0.0, 5.0)
+            logger.info("Std round wait: %.2fs", sleep_time)
+            
+        await asyncio.sleep(sleep_time)
