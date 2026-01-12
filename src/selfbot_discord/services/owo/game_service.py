@@ -42,6 +42,7 @@ class OWOGameService:
         self._pending_bet: OWOBet | None = None
         self._stop_requested = False
         self._result_received = asyncio.Event()
+        self._cooldown_retry_needed = False
 
     def start_game(
         self,
@@ -65,6 +66,7 @@ class OWOGameService:
         )
         self.state = OWOGameState.RUNNING
         self._stop_requested = False
+        self._cooldown_retry_needed = False
         self.stats_tracker.start_session()
         logger.info(
             "Started OWO game [bet=%d, mode=%s, mult=%.1f] in channel %s",
@@ -126,12 +128,20 @@ class OWOGameService:
         if not parse_result.is_owo_response:
             return False
 
+        if parse_result.is_captcha:
+            logger.critical("⚠️ CAPTCHA/VERIFICATION DETECTED! Stopping automation immediately for safety.")
+            self.stop_game()
+            self._result_received.set()
+            return True
+
         if parse_result.is_cooldown:
-            logger.info("Cooldown detected, will retry after delay")
-            # Wait a bit longer than the requested cooldown to be safe
-            await asyncio.sleep(self.retry_delay_seconds + 1.0)
+            logger.warning("⏱️ Cooldown detected! Will retry in ~5s...")
+            self._cooldown_retry_needed = True
             self._result_received.set()
             return False
+
+        # Reset flag on valid response
+        self._cooldown_retry_needed = False
 
         if parse_result.is_win:
             self._pending_bet.result = BetResult.WIN
@@ -178,6 +188,7 @@ class OWOGameService:
                 break
 
             self._result_received.clear()
+            self._cooldown_retry_needed = False # Reset before new round
             self.state = OWOGameState.RUNNING  # Ensure we are in running state before placing bet
             
             if not await self.place_bet():
@@ -191,9 +202,17 @@ class OWOGameService:
                 self.state = OWOGameState.RUNNING
                 continue
 
-            #Base 10s + random 5s
-            sleep_time = 10.0 + random.uniform(0.0, 5.0)
-            logger.info("Sleeping for %.2f seconds", sleep_time)
+            # Sleep Logic:
+            # If Cooldown: Short random sleep (4-6s)
+            # If Normal: Long random sleep (10-15s)
+            
+            if self._cooldown_retry_needed:
+                sleep_time = random.uniform(4.0, 6.0)
+                logger.info("Cooldown retry wait: %.2fs", sleep_time)
+            else:
+                sleep_time = 10.0 + random.uniform(0.0, 5.0)
+                logger.info("Std round wait: %.2fs", sleep_time)
+                
             await asyncio.sleep(sleep_time)
 
         logger.info("Game loop ended")

@@ -14,6 +14,7 @@ class ParseResult:
     is_win: bool = False
     is_loss: bool = False
     is_cooldown: bool = False
+    is_captcha: bool = False
     won_amount: int = 0
     balance: int = 0
     confidence: float = 0.0
@@ -31,6 +32,7 @@ class OWOMessageParser:
     )
     LOSS_PATTERN = re.compile(r"lost it all", re.IGNORECASE)
     COOLDOWN_PATTERN = re.compile(r"slow down|cooldown|wait|please wait", re.IGNORECASE)
+    CAPTCHA_PATTERN = re.compile(r"renderer|captcha|verify|human|banned", re.IGNORECASE)
     BALANCE_PATTERN = re.compile(r"you currently have\s*([\d,]+)", re.IGNORECASE)
 
     @classmethod
@@ -51,6 +53,13 @@ class OWOMessageParser:
 
         # Debug logging to see what the bot actually sees
         # logger.debug(f"Parsing OWO message: {content!r}")
+
+        if cls.CAPTCHA_PATTERN.search(content):
+            return ParseResult(
+                is_owo_response=True,
+                is_captcha=True,
+                confidence=1.0,
+            )
 
         if cls.COOLDOWN_PATTERN.search(content):
             return ParseResult(
