@@ -7,6 +7,7 @@ class OWOStatsPresenter:
 
     @staticmethod
     def format_stats(stats: OWOStats, strategy: MartingaleStrategy | None, state: OWOGameState) -> str:
+        # 1. Calculate Duration
         session_duration = "N/A"
         if stats.session_start:
             end_time = stats.session_end or datetime.now()
@@ -16,34 +17,52 @@ class OWOStatsPresenter:
             minutes, seconds = divmod(remainder, 60)
             session_duration = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-        # Determine status string
+        # 2. Determine Status & Profit Color
         is_active = state.name in ("RUNNING", "COOLDOWN")
-        status_icon = "🟢" if is_active else "🔴"
-        status = "RUNNING" if is_active else "STOPPED"
-
-        current_bet = f"{strategy.current_bet:,}" if strategy else "0"
+        status_map = {
+            "RUNNING": "🟢 RUNNING",
+            "COOLDOWN": "🟡 COOLDOWN",
+            "IDLE": "⚪ IDLE",
+            "STOPPED": "🔴 STOPPED"
+        }
+        status_str = status_map.get(state.name, state.name)
         
-        # Calculate rates
+        profit_int = stats.net_profit
+        profit_emoji = "💸" if profit_int < 0 else "💰"
+        profit_sign = "+" if profit_int > 0 else ""
+        profit_str = f"{profit_sign}{profit_int:,}"
+
+        # 3. Rates
         win_rate = f"{stats.win_rate:.1f}%"
-        profit = f"{stats.net_profit:+,}"
-
-        lines = []
-        lines.append(TextStyler.stat_line([("🟢 Status", status), ("⏱️ Duration", session_duration)]))
-        lines.append("")
-        lines.append(TextStyler.key_value("💰 Net Profit", profit))
-        lines.append(TextStyler.stat_line([("📈 Win Rate", win_rate), ("🎲 Games", stats.total_games)]))
-        lines.append(TextStyler.stat_line([("✅ Wins", stats.total_wins), ("❌ Losses", stats.total_losses)]))
-        lines.append("")
-        lines.append(TextStyler.key_value("🏆 Highest Win", f"{stats.highest_win:,}"))
-        lines.append(TextStyler.key_value("🔥 Loss Streak", f"{stats.current_loss_streak} (Max: {stats.highest_loss_streak})"))
         
-        if strategy:
+        # 4. Build Lines
+        lines = []
+        
+        # Header Stats
+        lines.append(f"> **Status**: `{status_str}`")
+        lines.append(f"> **Time**: `{session_duration}`")
+        lines.append("")
+        
+        # Financials
+        lines.append(f"{profit_emoji} **Net Profit**: `{profit_str}`")
+        lines.append(f"📊 **Win Rate**: `{win_rate}`  [ `{stats.total_games}` games ]")
+        lines.append("")
+        
+        # Details (Grid)
+        lines.append(f"✅ Wins: `{stats.total_wins}`    ❌ Losses: `{stats.total_losses}`")
+        lines.append(f"🏆 High: `{stats.highest_win:,}`    🔥 Streak: `{stats.current_loss_streak}`")
+        
+        # Prediction
+        if strategy and is_active:
             lines.append("")
-            lines.append(f"**Next Bet**: `{current_bet}`")
+            lines.append("---")
+            next_bet = strategy.current_bet
+            next_side = strategy.get_next_side() if strategy else "?"
+            lines.append(f"🎲 **Next Bet**: `{next_bet:,}` on `{next_side}`")
 
         return TextStyler.make_embed(
-            title="ClaimOWO Session",
+            title="ClaimOWO Dashboard",
             content="\n".join(lines),
-            emoji="📊",
-            footer="Hikari OWO Automaton"
+            emoji="🎰",
+            footer="Hikari Automation Systems"
         )
