@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
-from selfbot_discord.services.owo.models import BettingSide, MultiplierMode
+from selfbot_discord.services.owo.models import BettingSide, StrategyFlag
 
 
 class OWOUsageError(Exception):
@@ -14,7 +14,7 @@ class OWOUsageError(Exception):
 @dataclass
 class StartParams:
     amount: int
-    multiplier_mode: MultiplierMode = MultiplierMode.STATIC
+    active_flags: set[StrategyFlag] = field(default_factory=set)
     static_multiplier: float = 3.0
     betting_side: BettingSide = BettingSide.RANDOM
 
@@ -32,7 +32,7 @@ class OWOArgParser:
         if not args:
             return CLIResult(action="usage")
 
-        # Legacy check: if arg[0] is not a flag, handle legacy shortcuts
+        # Legacy check
         is_new_format = any(arg.startswith("-") for arg in args)
         
         if not is_new_format:
@@ -48,12 +48,12 @@ class OWOArgParser:
                     action="start",
                     start_params=StartParams(amount=int(cmd))
                 )
-            # Unknown non-flag argument -> assume invalid or usage
             return CLIResult(action="usage")
-        action = "start" # Default
         
+        action = "start"
         base_bet: int | None = None
-        multiplier_mode = MultiplierMode.STATIC
+        
+        active_flags = set()
         static_multiplier: float = 3.0
         betting_side = BettingSide.RANDOM
         
@@ -87,63 +87,25 @@ class OWOArgParser:
                 val = args[i+1].lower()
                 i += 1
                 
-                if val == "auto":
-                    multiplier_mode = MultiplierMode.AUTO
-                else:
-                    # Regex to match: x?([number])(-)?([mode])?
-                    # Examples: x2, x2.5, x2-safe, safe, maintain, x3-maintain
-                    match = re.match(r"^x?(\d*\.?\d+)(?:-?([a-zA-Z]+))?$|^([a-zA-Z]+)$", val)
-                    
-                    if match:
-                        # Group 1: Number (if present)
-                        # Group 2: Mode (if present after number)
-                        # Group 3: Mode (if ONLY mode)
-                        
-                        num_str = match.group(1)
-                        mode_suffix = match.group(2)
-                        only_mode = match.group(3)
-                        
-                        # Determine Mode
-                        mode_str = (mode_suffix or only_mode or "").lower()
-                        
-                        if mode_str in ("safe", "safety"):
-                            multiplier_mode = MultiplierMode.SAFE
-                        elif mode_str in ("maintain", "keep"):
-                            multiplier_mode = MultiplierMode.MAINTAIN
-                        elif mode_str in ("random", "decay"):
-                            multiplier_mode = MultiplierMode.RANDOM_DECAY
-                        elif not mode_str:
-                            multiplier_mode = MultiplierMode.STATIC
-                        else:
-                            raise OWOUsageError(f"Unknown mode '{mode_str}' in '{val}'.")
-                            
-                        # Determine Multiplier
-                        if num_str:
-                            try:
-                                static_multiplier = float(num_str)
-                            except ValueError:
-                                raise OWOUsageError(f"Invalid multiplier number: {num_str}")
-                        else:
-                            # Default multiplier if only mode is specified (e.g. "-e safe")
-                            static_multiplier = 2.0
-                            
-                    else:
-                        raise OWOUsageError(f"Invalid format '{val}'. Examples: x2, x3-safe, maintain")
+                mult, flags = self._parse_strategy_input(val)
+                if mult is not None:
+                    static_multiplier = mult
+                active_flags.update(flags)
 
             elif arg in ("-side", "--side", "-sd"):
                 if i + 1 >= len(args):
                     raise OWOUsageError("Missing value for `-side` flag.")
-                val = args[i+1].lower()
+                side_val = args[i+1].lower()
                 i += 1
 
-                if val in ("h", "head", "heads"):
+                if side_val in ("h", "head", "heads"):
                     betting_side = BettingSide.HEADS
-                elif val in ("t", "tail", "tails"):
+                elif side_val in ("t", "tail", "tails"):
                     betting_side = BettingSide.TAILS
-                elif val in ("r", "rand", "random"):
+                elif side_val in ("r", "rand", "random"):
                      betting_side = BettingSide.RANDOM
                 else:
-                     raise OWOUsageError(f"Invalid side: {val}. Use h, t, or r.")
+                     raise OWOUsageError(f"Invalid side: {side_val}. Use h, t, or r.")
             
             i += 1
 
@@ -155,8 +117,57 @@ class OWOArgParser:
             action="start",
             start_params=StartParams(
                 amount=base_bet,
-                multiplier_mode=multiplier_mode,
+                active_flags=active_flags,
                 static_multiplier=static_multiplier,
                 betting_side=betting_side
             )
         )
+
+    @staticmethod
+    def _parse_strategy_input(val: str) -> tuple[float | None, set[StrategyFlag]]:
+        """Parses composite strategy string (e.g. 'x2-safe-random') -> (multiplier, flags)."""
+        flags = set()
+        multiplier: float | None = None
+        
+        if val == "auto":
+            flags.add(StrategyFlag.AUTO_MULTIPLIER)
+            return multiplier, flags
+
+        # 1. Extract Number if present (e.g., x2.5 or 2.5)
+        multiplier_match = re.match(r"^x?(\d*\.?\d+)", val)
+        remaining = val
+        
+        if multiplier_match:
+            num_str = multiplier_match.group(1)
+            try:
+                multiplier = float(num_str)
+            except ValueError:
+                raise OWOUsageError(f"Invalid multiplier number: {num_str}")
+            remaining = val[multiplier_match.end():]
+        elif not any(x in val for x in ["safe", "maintain", "random"]):
+             # If no number AND no keywords match, defaulting might be dangerous or intended.
+             # Logic implies if only mode given, mult defaults to None (preserved old val)
+             # But if user types just logic flags, we return None for mult.
+             pass
+
+        if not multiplier and not remaining.strip("-"):
+             # e.g., user entered just "x2" -> valid
+             pass
+
+        # 2. Parse Valid Strategy Keywords
+        parts = re.split(r"[^a-z]+", remaining)
+        for part in parts:
+            if not part: continue
+            
+            if part in ("safe", "safety"):
+                flags.add(StrategyFlag.SAFE)
+            elif part in ("maintain", "keep"):
+                flags.add(StrategyFlag.MAINTAIN)
+            elif part in ("random", "decay"):
+                flags.add(StrategyFlag.RANDOM)
+            elif part in ("x", "auto"):
+                pass 
+            else:
+                raise OWOUsageError(f"Unknown strategy flag '{part}' in '{val}'.")
+                
+        return multiplier, flags
