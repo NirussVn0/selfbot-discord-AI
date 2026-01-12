@@ -9,6 +9,7 @@ from selfbot_discord.commands.base import Cog, CommandContext, CommandError, com
 from selfbot_discord.services.owo import OWOGameService, OWOStatsTracker, MultiplierMode, BettingSide
 from selfbot_discord.services.owo.presenter import OWOStatsPresenter
 from selfbot_discord.services.owo.cli import OWOArgParser, OWOUsageError
+from selfbot_discord.services.owo.settings import OWOSettingsManager, OWOGameConfig
 from selfbot_discord.services.cleanup import MessageCleaner
 
 if TYPE_CHECKING:
@@ -53,38 +54,53 @@ class ClaimOWOCog(Cog):
             await self._handle_cleanup(ctx)
             return
 
-        if result.action == "start" and result.start_params:
-            await self._handle_start(
-                ctx, 
-                result.start_params.amount,
-                result.start_params.multiplier_mode,
-                result.start_params.static_multiplier,
-                result.start_params.betting_side
-            )
+        # Start Logic with Persistence
+        if result.action == "start":
+            params = result.start_params
+            
+            # Case 1: Params provided -> Use them & Save
+            if params:
+                config = OWOGameConfig(
+                    amount=params.amount,
+                    multiplier_mode=params.multiplier_mode,
+                    static_multiplier=params.static_multiplier,
+                    betting_side=params.betting_side
+                )
+                OWOSettingsManager.save(config)
+            
+            # Case 2: No params -> Try to Load
+            else:
+                config = OWOSettingsManager.load()
+                if not config:
+                    await ctx.respond("❌ No saved settings found. Please provide arguments first:\n`h!claimowo -b <amount>`")
+                    return
+            
+            await self._handle_start(ctx, config)
+
 
     async def _show_usage(self, ctx: CommandContext) -> None:
         p = ctx.bot._config.discord.command_prefix
         await ctx.respond(
             f"# 🛠️ ClaimOWO Usage\n"
-            f"**Start**: `{p}claimowo -b <bet> [flags]`\n"
+            f"**Start (New)**: `{p}claimowo -b <bet> [flags]`\n"
+            f"**Start (Saved)**: `{p}claimowo`\n"
             f"**Stop**: `{p}claimowo -s`\n"
             f"**Info**: `{p}claimowo -i`\n"
             f"**Reset**: `{p}claimowo -reset`\n\n"
             f"### Flags\n"
             f"`-b <amt>` : Base bet amount\n"
-            f"`-e <data> ` : Multiplier (`auto`, `x2`, `x3`)\n"
             f"`-side <h/t/r>` : Side (`heads`, `tails`, `random`)\n"
+            f"`-e <mode>` : Betting Strategy\n"
+            f"> `maintain` : Aggressive. Keeps high bet on win streak. Drops 2 steps on break.\n"
+            f"> `safe` : Conservative. Drops 2 steps if loss streak > 5.\n"
+            f"> `random` : Subtly decays multiplier (x2.0 -> x1.5) as streak grows.\n"
+            f"> `x2` : Standard Martingale.\n"
             f"`-clear` : Cleanup game messages"
         )
 
-    async def _handle_start(
-        self,
-        ctx: CommandContext,
-        amount: int,
-        multiplier_mode: MultiplierMode = MultiplierMode.STATIC,
-        static_multiplier: float = 3.0,
-        betting_side: BettingSide = BettingSide.RANDOM
-    ) -> None:
+    async def _handle_start(self, ctx: CommandContext, config: OWOGameConfig) -> None:
+        amount = config.amount
+        
         if amount <= 0:
             raise CommandError("Bet amount must be greater than 0.")
 
@@ -94,13 +110,18 @@ class ClaimOWOCog(Cog):
         self.game_service.start_game(
             ctx.message.channel,
             amount,
-            multiplier_mode=multiplier_mode,
-            static_multiplier=static_multiplier,
-            betting_side=betting_side
+            multiplier_mode=config.multiplier_mode,
+            static_multiplier=config.static_multiplier,
+            betting_side=config.betting_side
         )
         
-        mode_str = "Auto" if multiplier_mode == MultiplierMode.AUTO else f"Static {static_multiplier}x"
-        side_str = betting_side.name.title()
+        if config.multiplier_mode == MultiplierMode.AUTO:
+            mode_str = "Auto"
+        elif config.multiplier_mode == MultiplierMode.STATIC:
+            mode_str = f"Static {config.static_multiplier}x"
+        else:
+            mode_str = f"{config.multiplier_mode.name.title()} {config.static_multiplier}x"
+        side_str = config.betting_side.name.title()
         fmt_amount = f"{amount:,}"
 
         response = await ctx.respond(
