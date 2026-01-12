@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Literal
 
@@ -88,15 +89,46 @@ class OWOArgParser:
                 
                 if val == "auto":
                     multiplier_mode = MultiplierMode.AUTO
-                elif val.startswith("x") or val.replace(".", "", 1).isdigit():
-                    multiplier_mode = MultiplierMode.STATIC
-                    mult_str = val[1:] if val.startswith("x") else val
-                    try:
-                        static_multiplier = float(mult_str)
-                    except ValueError:
-                        raise OWOUsageError(f"Invalid multiplier: {val}")
                 else:
-                    raise OWOUsageError(f"Invalid mode: {val}. Use 'auto', 'x2', 'x3', etc.")
+                    # Regex to match: x?([number])(-)?([mode])?
+                    # Examples: x2, x2.5, x2-safe, safe, maintain, x3-maintain
+                    match = re.match(r"^x?(\d*\.?\d+)(?:-?([a-zA-Z]+))?$|^([a-zA-Z]+)$", val)
+                    
+                    if match:
+                        # Group 1: Number (if present)
+                        # Group 2: Mode (if present after number)
+                        # Group 3: Mode (if ONLY mode)
+                        
+                        num_str = match.group(1)
+                        mode_suffix = match.group(2)
+                        only_mode = match.group(3)
+                        
+                        # Determine Mode
+                        mode_str = (mode_suffix or only_mode or "").lower()
+                        
+                        if mode_str in ("safe", "safety"):
+                            multiplier_mode = MultiplierMode.SAFE
+                        elif mode_str in ("maintain", "keep"):
+                            multiplier_mode = MultiplierMode.MAINTAIN
+                        elif mode_str in ("random", "decay"):
+                            multiplier_mode = MultiplierMode.RANDOM_DECAY
+                        elif not mode_str:
+                            multiplier_mode = MultiplierMode.STATIC
+                        else:
+                            raise OWOUsageError(f"Unknown mode '{mode_str}' in '{val}'.")
+                            
+                        # Determine Multiplier
+                        if num_str:
+                            try:
+                                static_multiplier = float(num_str)
+                            except ValueError:
+                                raise OWOUsageError(f"Invalid multiplier number: {num_str}")
+                        else:
+                            # Default multiplier if only mode is specified (e.g. "-e safe")
+                            static_multiplier = 2.0
+                            
+                    else:
+                        raise OWOUsageError(f"Invalid format '{val}'. Examples: x2, x3-safe, maintain")
 
             elif arg in ("-side", "--side", "-sd"):
                 if i + 1 >= len(args):
