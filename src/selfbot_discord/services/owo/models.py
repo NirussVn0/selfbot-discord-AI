@@ -24,6 +24,9 @@ class BetResult(Enum):
 class MultiplierMode(Enum):
     STATIC = auto()
     AUTO = auto()
+    SAFE = auto()
+    MAINTAIN = auto()
+    RANDOM_DECAY = auto()
 
 
 class BettingSide(Enum):
@@ -41,18 +44,72 @@ class MartingaleStrategy:
     consecutive_losses: int = 0
     max_bet: int = 250000
     betting_side: BettingSide = BettingSide.RANDOM
+    
+    # Track previous result for Maintain logic
+    last_result: BetResult = BetResult.PENDING
 
     def on_win(self) -> None:
-        self.current_bet = self.base_bet
+        self.last_result = BetResult.WIN
         self.consecutive_losses = 0
+        
+        # Maintain Logic: If we were betting high, KEEP it high on win
+        if self.multiplier_mode == MultiplierMode.MAINTAIN:
+            # If we won, we do NOT reset. We stay at current_bet.
+            return
+
+        self.current_bet = self.base_bet
 
     def on_loss(self) -> None:
         self.consecutive_losses += 1
         
+        # Determine Multiplier
         multiplier = self.static_multiplier
+        
         if self.multiplier_mode == MultiplierMode.AUTO:
             multiplier = self._get_auto_multiplier()
             
+        elif self.multiplier_mode == MultiplierMode.RANDOM_DECAY:
+             # Random Decay / Dynamic Random
+             # User Request: "x1.5-random" -> 1.5 to 2.0
+             # Logic: Base + Random(0.0 to 0.5)
+             # Also applying slight decay based on streak for "stealth"
+             
+             base = self.static_multiplier
+             # Decay factor: reduces the ceiling as streak grows
+             decay_ceiling = max(0.0, 0.5 - (self.consecutive_losses * 0.05))
+             
+             jitter = random.uniform(0.0, decay_ceiling)
+             multiplier = base + jitter
+
+        elif self.multiplier_mode == MultiplierMode.MAINTAIN:
+            # Maintain Logic Handle Loss
+            # If we were Maintaining a Streak (High Bet) and LOST:
+            # Drop 2 steps (approx /4)
+            if self.last_result == BetResult.WIN and self.current_bet > self.base_bet:
+                next_bet = int(self.current_bet / 4) 
+                if next_bet < self.base_bet:
+                    next_bet = self.base_bet
+                self.current_bet = next_bet
+                self.last_result = BetResult.LOSS
+                return
+            
+            # Normal Loss: Use the configured multiplier (e.g. x1.5 or x2)
+            multiplier = self.static_multiplier
+
+        elif self.multiplier_mode == MultiplierMode.SAFE:
+            # Safe Logic: If streak > 5, Panic Drop
+            if self.consecutive_losses > 5:
+                 next_bet = int(self.current_bet / 4)
+                 if next_bet < self.base_bet:
+                     next_bet = self.base_bet
+                 self.current_bet = next_bet
+                 self.last_result = BetResult.LOSS
+                 return
+
+            multiplier = self.static_multiplier
+
+            
+        # Calculate Next Bet
         next_bet = int(self.current_bet * multiplier)
         
         # Cap at max bet
@@ -60,6 +117,7 @@ class MartingaleStrategy:
             next_bet = self.max_bet
             
         self.current_bet = next_bet
+        self.last_result = BetResult.LOSS
 
     def get_next_side(self) -> Literal["h", "t"]:
         if self.betting_side == BettingSide.HEADS:
@@ -83,6 +141,7 @@ class MartingaleStrategy:
     def reset(self) -> None:
         self.current_bet = self.base_bet
         self.consecutive_losses = 0
+        self.last_result = BetResult.PENDING
 
 
 @dataclass(slots=True)
