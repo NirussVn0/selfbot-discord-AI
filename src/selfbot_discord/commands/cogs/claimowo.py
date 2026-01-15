@@ -6,7 +6,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from selfbot_discord.commands.base import Cog, CommandContext, CommandError, command
-from selfbot_discord.services.owo import OWOGameService, OWOStatsTracker, MultiplierMode, BettingSide
+from selfbot_discord.services.owo import OWOGameService, OWOStatsTracker, BettingSide
+# MultiplierMode is deprecated for CLI inputs, though checked internally
+from selfbot_discord.services.owo.models import StrategyFlag
 from selfbot_discord.services.owo.presenter import OWOStatsPresenter
 from selfbot_discord.services.owo.cli import OWOArgParser, OWOUsageError
 from selfbot_discord.services.owo.settings import OWOSettingsManager, OWOGameConfig
@@ -62,7 +64,7 @@ class ClaimOWOCog(Cog):
             if params:
                 config = OWOGameConfig(
                     amount=params.amount,
-                    multiplier_mode=params.multiplier_mode,
+                    active_flags=params.active_flags,
                     static_multiplier=params.static_multiplier,
                     betting_side=params.betting_side
                 )
@@ -90,11 +92,11 @@ class ClaimOWOCog(Cog):
             f"### Flags\n"
             f"`-b <amt>` : Base bet amount\n"
             f"`-side <h/t/r>` : Side (`heads`, `tails`, `random`)\n"
-            f"`-e <mode>` : Betting Strategy\n"
-            f"> `maintain` : Aggressive. Keeps high bet on win streak. Drops 2 steps on break.\n"
-            f"> `safe` : Conservative. Drops 2 steps if loss streak > 5.\n"
-            f"> `random` : Subtly decays multiplier (x2.0 -> x1.5) as streak grows.\n"
-            f"> `x2` : Standard Martingale.\n"
+            f"`-e <mode>` : Betting Strategy (Combine them!)\n"
+            f"> `maintain` : Keeps high bet on win streak. Drops on break.\n"
+            f"> `safe` : Drops 2 steps if loss streak > 5.\n"
+            f"> `random` : Subtly decays multiplier (xBase -> xBase+0.5).\n"
+            f"> `Example` : `-e x2-safe-random` (x2.0 + Safe + Random)\n"
             f"`-clear` : Cleanup game messages"
         )
 
@@ -110,17 +112,17 @@ class ClaimOWOCog(Cog):
         self.game_service.start_game(
             ctx.message.channel,
             amount,
-            multiplier_mode=config.multiplier_mode,
+            active_flags=config.active_flags,
             static_multiplier=config.static_multiplier,
             betting_side=config.betting_side
         )
         
-        if config.multiplier_mode == MultiplierMode.AUTO:
-            mode_str = "Auto"
-        elif config.multiplier_mode == MultiplierMode.STATIC:
+        if not config.active_flags:
             mode_str = f"Static {config.static_multiplier}x"
         else:
-            mode_str = f"{config.multiplier_mode.name.title()} {config.static_multiplier}x"
+            names = [f.name.title() for f in config.active_flags]
+            mode_str = f"{' + '.join(names)} {config.static_multiplier}x"
+            
         side_str = config.betting_side.name.title()
         fmt_amount = f"{amount:,}"
 
