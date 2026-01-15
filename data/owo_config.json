@@ -1,0 +1,9 @@
+{
+  "amount": 4000,
+  "strategies": [
+    "SAFE",
+    "RANDOM"
+  ],
+  "static_multiplier": 2.0,
+  "betting_side": "RANDOM"
+}
