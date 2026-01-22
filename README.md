@@ -1,4 +1,4 @@
-# 🤖 Self-Bot Discord AI (Astraa)
+# 🤖 Self-Bot Discord AI (Hikarii)
 
 <div align="center">
 
