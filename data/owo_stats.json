@@ -1,12 +1,12 @@
 {
-  "total_games": 0,
-  "total_wins": 0,
-  "total_losses": 0,
-  "total_money_won": 0,
-  "total_money_lost": 0,
-  "highest_win": 0,
-  "highest_loss_streak": 0,
-  "current_loss_streak": 0,
-  "session_start": null,
+  "total_games": 255,
+  "total_wins": 136,
+  "total_losses": 119,
+  "total_money_won": 841756,
+  "total_money_lost": 287823,
+  "highest_win": 204800,
+  "highest_loss_streak": 9,
+  "current_loss_streak": 2,
+  "session_start": "2026-01-13T00:05:19.460400",
   "session_end": null
 }
