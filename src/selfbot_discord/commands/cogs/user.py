@@ -98,4 +98,24 @@ class UserCog(Cog):
     @command("stopactivity", description="Clear activity status.")
     async def stopactivity(self, ctx: CommandContext) -> None:
         await self.status.stop_activity()
-        await ctx.respond(TextStyler.make_embed("Activity Cleared", "Status reset to default.", emoji="⏹️"))
+        await ctx.respond(TextStyler.make_embed("Activity Cleared", "Status reset.", emoji="⏹️"))
+
+    @command("listening", description="Set activity to 'Listening'.")
+    async def listening(self, ctx: CommandContext) -> None:
+        if not ctx.args:
+            p = ctx.config_manager.config.discord.command_prefix
+            await ctx.respond(TextStyler.make_embed("Activity", f"Usage: `{p}listening <status>`", emoji="🎧"))
+            return
+        text = " ".join(ctx.args)
+        await self.status.set_activity("listening", text)
+        await ctx.respond(TextStyler.make_embed("Activity Updated", f"Listening to **{text}**", emoji="🎧"))
+
+    @command("streaming", description="Set activity to 'Streaming'.")
+    async def streaming(self, ctx: CommandContext) -> None:
+        if not ctx.args:
+            p = ctx.config_manager.config.discord.command_prefix
+            await ctx.respond(TextStyler.make_embed("Activity", f"Usage: `{p}streaming <status>`", emoji="📡"))
+            return
+        text = " ".join(ctx.args)
+        await self.status.set_activity("streaming", text)
+        await ctx.respond(TextStyler.make_embed("Activity Updated", f"Streaming **{text}**", emoji="📡"))
