@@ -139,7 +139,8 @@ class GeneralCog(Cog):
     @command("clear", description="Clear messages from channel.")
     async def clear(self, ctx: CommandContext) -> None:
         if not ctx.args:
-            await ctx.respond("Usage: `clear <amount> [-f] [@user]`")
+            p = ctx.config_manager.config.discord.command_prefix
+            await ctx.respond(f"Usage: `{p}clear <amount> [-f] [@user]`")
             return
             
         amount = 0
@@ -172,10 +173,153 @@ class GeneralCog(Cog):
              await ctx.respond("Invalid amount.")
              return
              
-        deleted = await MessageCleaner.cleanup_channel(
-            ctx.message.channel, 
-            amount, 
-            target_ids=target_id
-        )
             
         await ctx.respond(f"🧹 Cleared {deleted} messages.", delete_after=3.0)
+
+    @command("author", description="Show owner's social networks.")
+    async def author(self, ctx: CommandContext) -> None:
+        socials = [
+            "**GitHub**: [NirussVn0](https://github.com/NirussVn0)",
+            "**Discord**: `nirussvn0`",
+            # Add more as needed
+        ]
+        await ctx.respond(TextStyler.make_embed("Author Socials", "\n".join(socials), emoji="🌐"))
+
+    @command("changeprefix", description="Change the bot's prefix.")
+    async def changeprefix(self, ctx: CommandContext) -> None:
+        if not ctx.args:
+            p = ctx.config_manager.config.discord.command_prefix
+            await ctx.respond(TextStyler.make_embed("Prefix", f"Usage: `{p}changeprefix <new_prefix>`", emoji="⚙️"))
+            return
+            
+        new_prefix = ctx.args[0]
+        ctx.config_manager.config.discord.command_prefix = new_prefix
+        ctx.config_manager.save()
+        await ctx.respond(TextStyler.make_embed("Configuration", f"Prefix changed to `{new_prefix}`", emoji="✅"))
+
+    @command("shutdown", description="Stop the selfbot.")
+    async def shutdown(self, ctx: CommandContext) -> None:
+        await ctx.respond(TextStyler.make_embed("Shutdown", "Shutting down... 👋", emoji="🛑"))
+        await ctx.bot.close()
+
+    @command("uptime", description="Returns how long the selfbot has been running.")
+    async def uptime(self, ctx: CommandContext) -> None:
+        uptime_seconds = ctx.bot.uptime_seconds
+        duration = ctx.bot.format_duration(uptime_seconds)
+        await ctx.respond(TextStyler.make_embed("Uptime", f"**Duration**: `{duration}`", emoji="⏱️"))
+    
+    @command("pingweb", description="Ping a website.")
+    async def pingweb(self, ctx: CommandContext) -> None:
+        import aiohttp
+        if not ctx.args:
+            p = ctx.config_manager.config.discord.command_prefix
+            await ctx.respond(TextStyler.make_embed("Ping Web", f"Usage: `{p}pingweb <url>`", emoji="🌍"))
+            return
+            
+        url = ctx.args[0]
+        if not url.startswith("http"):
+            url = f"http://{url}"
+            
+        try:
+            async with aiohttp.ClientSession() as session:
+                start = asyncio.get_event_loop().time()
+                async with session.get(url, timeout=5) as resp:
+                    end = asyncio.get_event_loop().time()
+                    lat = (end - start) * 1000
+                    status_icon = "✅" if resp.status < 400 else "❌"
+                    content = f"**Status**: `{resp.status}`\n**Latency**: `{lat:.0f}ms`"
+                    await ctx.respond(TextStyler.make_embed(f"Ping: {url}", content, emoji=status_icon))
+        except Exception as e:
+            await ctx.respond(TextStyler.make_embed("Error", f"Could not reach {url}", emoji="❌"))
+
+    @command("firstmessage", description="Get the link to the first message in the channel.")
+    async def firstmessage(self, ctx: CommandContext) -> None:
+        try:
+            async for msg in ctx.message.channel.history(limit=1, oldest_first=True):
+                await ctx.respond(TextStyler.make_embed("First Message", f"[Jump to first message]({msg.jump_url})", emoji="⏮️"))
+                return
+            await ctx.respond(TextStyler.make_embed("Error", "No messages found.", emoji="❌"))
+        except Exception as e:
+            await ctx.respond(TextStyler.make_embed("Error", str(e), emoji="❌"))
+
+    @command("fetchmembers", description="Retrieve list of members (debug).")
+    async def fetchmembers(self, ctx: CommandContext) -> None:
+        if not ctx.message.guild:
+             await ctx.respond(TextStyler.make_embed("Error", "Guild only.", emoji="❌"))
+             return
+        
+        await ctx.message.guild.chunk()
+        await ctx.respond(TextStyler.make_embed("Members", f"Fetched members. Total: `{len(ctx.message.guild.members)}`", emoji="👥"))
+
+    @command("guildicon", description="Get the icon of the current server.")
+    async def guildicon(self, ctx: CommandContext) -> None:
+        if not ctx.message.guild:
+             await ctx.respond("Guild only.")
+             return
+             
+        if ctx.message.guild.icon:
+            await ctx.respond(ctx.message.guild.icon.url)
+        else:
+            await ctx.respond("No guild icon.")
+
+    @command("usericon", description="Get profile picture of a user.")
+    async def usericon(self, ctx: CommandContext) -> None:
+        target = ctx.author
+        if ctx.message.mentions:
+            target = ctx.message.mentions[0]
+            
+        if target.avatar:
+            await ctx.respond(target.avatar.url)
+        else:
+            await ctx.respond(target.default_avatar.url)
+
+    @command("guildbanner", description="Get the banner of the current server.")
+    async def guildbanner(self, ctx: CommandContext) -> None:
+        if not ctx.message.guild:
+             await ctx.respond("Guild only.")
+             return
+             
+        if ctx.message.guild.banner:
+            await ctx.respond(ctx.message.guild.banner.url)
+        else:
+            await ctx.respond("No guild banner.")
+
+    @command("guildinfo", description="Get information about the current server.")
+    async def guildinfo(self, ctx: CommandContext) -> None:
+        g = ctx.message.guild
+        if not g:
+             await ctx.respond("Guild only.")
+             return
+             
+        info = [
+            TextStyler.key_value("Name", g.name, style="bold"),
+            TextStyler.key_value("ID", str(g.id)),
+            TextStyler.key_value("Owner", str(g.owner)),
+            TextStyler.key_value("Members", str(g.member_count)),
+            TextStyler.key_value("Roles", str(len(g.roles))),
+            TextStyler.key_value("Created", g.created_at.strftime('%Y-%m-%d')),
+        ]
+        await ctx.respond(TextStyler.make_embed(f"Guild Info", "\n".join(info), emoji="🏰"))
+
+    @command("tokeninfo", description="Scrape info with a token (Simulated).")
+    async def tokeninfo(self, ctx: CommandContext) -> None:
+        if not ctx.args:
+            p = ctx.config_manager.config.discord.command_prefix
+            await ctx.respond(TextStyler.make_embed("Token Info", f"Usage: `{p}tokeninfo <token>`", emoji="🕵️"))
+            return
+            
+        token = ctx.args[0]
+        try:
+            import base64
+            parts = token.split('.')
+            if len(parts) >= 1:
+                id_part = parts[0]
+                missing_padding = len(id_part) % 4
+                if missing_padding:
+                    id_part += '=' * (4 - missing_padding)
+                user_id = int(base64.b64decode(id_part).decode('utf-8'))
+                await ctx.respond(TextStyler.make_embed("Token Info", f"Token belongs to User ID: `{user_id}`", emoji="🆔"))
+                return
+        except Exception:
+            pass
+        await ctx.respond(TextStyler.make_embed("Error", "Invalid token format.", emoji="❌"))
