@@ -66,21 +66,32 @@ class GeneralCog(Cog):
     @command("help", description="Display available commands.")
     async def help(self, ctx: CommandContext) -> None:
         prefix = ctx.config_manager.config.discord.command_prefix
+        commands = list(ctx.registry.commands())
+        
+        items_per_page = 10
+        total_pages = (len(commands) + items_per_page - 1) // items_per_page
+        
+        page = 1
+        if ctx.args and ctx.args[0].isdigit():
+            page = max(1, min(int(ctx.args[0]), total_pages))
+        
+        start_idx = (page - 1) * items_per_page
+        end_idx = start_idx + items_per_page
+        page_commands = commands[start_idx:end_idx]
         
         lines = []
-        for cmd in ctx.registry.commands():
-            cmd_name = f"{prefix}{cmd.name}"
-            desc = cmd.description
-            lines.append(f"**{cmd_name}**\n{desc}\n")
-            
+        for cmd in page_commands:
+            lines.append(f"**{prefix}{cmd.name}** — {cmd.description}")
+        
         content = "\n".join(lines)
+        footer = f"Page {page}/{total_pages} • {prefix}help [page]"
+        
         response = TextStyler.make_embed(
             title="Available Commands",
             content=content,
             emoji="📜",
-            footer=f"Prefix: {prefix}"
+            footer=footer
         )
-            
         await ctx.respond(response)
 
     @command("setting", description="View or modify configuration.")
