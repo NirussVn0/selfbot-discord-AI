@@ -16,7 +16,6 @@ class StatusService:
         self.bot = bot
 
     async def set_activity(self, activity_type: str, name: str) -> None:
-        """Set the bot's Discord activity."""
         type_map = {
             "playing": discord.ActivityType.playing,
             "watching": discord.ActivityType.watching,
@@ -28,11 +27,13 @@ class StatusService:
         act_type = type_map.get(activity_type.lower(), discord.ActivityType.playing)
         activity = discord.Activity(type=act_type, name=name)
         
-        # Update config so it persists on restart
         self.config_manager.config.discord.presence_message = name
         self.config_manager.save()
 
-        await self.bot.change_presence(activity=activity)
+        await self.bot.change_presence(
+            activity=activity,
+            status=discord.Status.online
+        )
         logger.info(f"Set activity to {activity_type}: {name}")
 
     async def stop_activity(self) -> None:
