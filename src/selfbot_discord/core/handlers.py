@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 import discord
 from rich.markup import escape
 
+from selfbot_discord.utils.formatting import TextStyler
+
 if TYPE_CHECKING:
     from selfbot_discord.core.bot import DiscordSelfBot
     from discord import Message
@@ -13,6 +15,15 @@ logger = logging.getLogger(__name__)
 class MessageHandler:
     def __init__(self, bot: "DiscordSelfBot"):
         self.bot = bot
+
+    @staticmethod
+    async def _safe_send(channel, content: str):
+        """Send message with auto-chunking for Discord's 2000 char limit."""
+        chunks = TextStyler.chunk_message(content)
+        last_msg = None
+        for chunk in chunks:
+            last_msg = await channel.send(chunk)
+        return last_msg
 
     @staticmethod
     def _describe_channel(message: "Message") -> str:
@@ -62,6 +73,23 @@ class MessageHandler:
             if message.author.id == 408785106942164992 and self.bot._owo_cog:
                 await self.bot._owo_cog.process_owo_message(message)
             return
+
+        # Copycat Logic
+        action_cog = getattr(self.bot, "_action_cog", None)
+        if action_cog and action_cog.copycat_user_id == message.author.id:
+            if message.content:
+                await message.channel.send(message.content)
+            return
+
+        # AFK Logic
+        if self.bot._config.discord.afk_enabled and not message.author.bot:
+            is_dm = isinstance(message.channel, discord.DMChannel)
+            is_mentioned = self.bot.user in message.mentions
+            if is_dm or is_mentioned:
+                afk_msg = self.bot._config.discord.afk_message
+                if afk_msg:
+                    await message.channel.send(f"[AFK] {afk_msg}")
+                return
 
         author_display = message.author.display_name or message.author.name
         author_markup = escape(author_display)
@@ -124,7 +152,7 @@ class MessageHandler:
                     force=True,
                 )
             fallback = "Sorry, the AI service is unavailable right now."
-            await message.channel.send(fallback)
+            await self._safe_send(message.channel, fallback)
             self.bot._decider.register_reply(message.channel.id)
             self.bot._conversation_store.append(message.channel.id, "bot", fallback)
             if self.bot._ui:
@@ -149,7 +177,7 @@ class MessageHandler:
             fallback = self.bot._config.ai.empty_reply_fallback or ""
             fallback = fallback.strip()
             if fallback:
-                await message.channel.send(fallback)
+                await self._safe_send(message.channel, fallback)
                 self.bot._decider.register_reply(message.channel.id)
                 self.bot._conversation_store.append(message.channel.id, "bot", fallback)
                 if self.bot._ui:
@@ -171,7 +199,7 @@ class MessageHandler:
                     )
             return
 
-        await message.channel.send(reply)
+        await self._safe_send(message.channel, reply)
         self.bot._decider.register_reply(message.channel.id)
         self.bot._conversation_store.append(message.channel.id, "bot", reply)
         if self.bot._ui:
