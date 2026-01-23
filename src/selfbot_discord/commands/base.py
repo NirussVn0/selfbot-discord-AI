@@ -1,11 +1,11 @@
-# Command abstractions for the Discord self-bot.
-
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, Protocol, Sequence, TYPE_CHECKING
 
 import discord
+
+from selfbot_discord.utils.formatting import TextStyler
 
 if TYPE_CHECKING:
     from selfbot_discord.config.manager import ConfigManager
@@ -34,10 +34,16 @@ class CommandContext:
         return self.message.author
 
     async def respond(self, content: str, *, delete_after: float | None = None) -> discord.Message:
-        response = await self.message.channel.send(content)
-        if delete_after is not None:
-            await self.bot.schedule_ephemeral_cleanup(self.message, response, delay=delete_after)
-        return response
+        chunks = TextStyler.chunk_message(content)
+        last_response: discord.Message | None = None
+        
+        for chunk in chunks:
+            last_response = await self.message.channel.send(chunk)
+            
+        if delete_after is not None and last_response:
+            await self.bot.schedule_ephemeral_cleanup(self.message, last_response, delay=delete_after)
+            
+        return last_response  # type: ignore[return-value]
 
 
 class Command(Protocol):

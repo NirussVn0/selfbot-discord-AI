@@ -1,40 +1,51 @@
 class TextStyler:
     """Helper class for creating premium Discord-like UI using Markdown."""
 
+    DISCORD_MAX_LENGTH = 2000
+
     @staticmethod
     def make_embed(title: str, content: str, emoji: str = "✨", footer: str | None = None, thumbnail: str | None = None) -> str:
-        """
-        Creates a 'fake embed' using Blockquotes (`>>>`) and Headers.
-        mimics the visual weight of a Discord Embed.
-        """
         header_text = f"# {emoji} {title}".strip()
-        
-        # Ensure content is string
         content = str(content)
-        
-        # If content has multiple lines, ensure they align well in blockquote
-        # Using >>> handles multiline automatically for the rest of the message
-        
         body = f">>> {content}"
-        
         if footer:
-            # Add a separator or just newline
             body += f"\n\n* {footer} *"
-            
         return f"{header_text}\n{body}"
 
     @staticmethod
     def key_value(key: str, value: str | int | float, style: str = "code") -> str:
-        """Formats a key-value pair. E.g. **Status**: `Online`"""
         val_str = f"`{value}`" if style == "code" else f"**{value}**"
         return f"**{key}**: {val_str}"
 
     @staticmethod
     def stat_line(items: list[tuple[str, str | int | float]]) -> str:
-        """Creates a single line of stats separated by dots or bars."""
-        # e.g. 🟢 Status: Running | ⏱️ Uptime: 2h
-        formatted = []
-        for icon_key, value in items:
-            # icon_key could be "🟢 Status"
-            formatted.append(f"**{icon_key}**: `{value}`")
+        formatted = [f"**{icon_key}**: `{value}`" for icon_key, value in items]
         return " │ ".join(formatted)
+
+    @staticmethod
+    def chunk_message(content: str, max_length: int = 1900) -> list[str]:
+        """Split long messages into chunks respecting Discord's limit."""
+        if len(content) <= max_length:
+            return [content]
+
+        chunks: list[str] = []
+        lines = content.split("\n")
+        current_chunk = ""
+
+        for line in lines:
+            if len(current_chunk) + len(line) + 1 > max_length:
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                    current_chunk = ""
+                if len(line) > max_length:
+                    for i in range(0, len(line), max_length):
+                        chunks.append(line[i:i + max_length])
+                else:
+                    current_chunk = line
+            else:
+                current_chunk += ("\n" if current_chunk else "") + line
+
+        if current_chunk.strip():
+            chunks.append(current_chunk.strip())
+
+        return chunks if chunks else [content[:max_length]]
