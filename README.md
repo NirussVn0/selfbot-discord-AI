@@ -81,7 +81,7 @@ python main.py
 
 | Command | Action |
 |---------|--------|
-| `h!astraa` | Show owner's social networks |
+| `h!author` | Show owner's social networks |
 | `h!geoip <ip>` | Locate an IP address |
 | `h!afk ON` | Enable AFK mode with auto-response |
 | `h!copycat ON <@user>` | Mimic a target user's messages |
